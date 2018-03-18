@@ -1,0 +1,13 @@
+apiVersion: "stable.k8s.psg.io/v1"
+kind: "Certificate"
+metadata:
+  name: "softwarehawaii-dot-com"
+  labels:
+    stable.k8s.psg.io/kcm.class: "default"
+spec:
+  domain: "softwarehawaii.com"
+  email: "derekpedersen.contact@gmail.com"
+  provider: "googlecloud"
+  secretName: softwarehawaii-dot-com
+  altNames:
+    - "www.softwarehawaii.com"

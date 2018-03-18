@@ -1,0 +1,55 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-proxy-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: nginx-proxy-deployment
+    spec:
+      containers:
+      - name: nginx-proxy
+        image: us.gcr.io/derekpedersen-195304/nginx-proxy:latest
+        ports:
+        - containerPort: 80
+        - containerPort: 443
+        volumeMounts:
+          - name: celebrityskateboards-dot-com
+            mountPath: /etc/ssl_cert/celebrityskateboards.com
+          - name: pedersensoftware-dot-com
+            mountPath: /etc/ssl_cert/pedersensoftware.com
+          - name: softwarehawaii-dot-com
+            mountPath: /etc/ssl_cert/softwarehawaii.com
+          - name: softwareseattle-dot-com
+            mountPath: /etc/ssl_cert/softwareseattle.com
+          - name: derekpedersen-dot-com
+            mountPath: /etc/ssl_cert/derekpedersen.com
+          # - name: derekpedersen-dot-io
+          #   mountPath: /etc/ssl_cert/derekpedersen.io
+      volumes:
+        - name: celebrityskateboards-dot-com
+          secret:
+            secretName: celebrityskateboards-dot-com
+            defaultMode: 0777
+        - name: pedersensoftware-dot-com
+          secret:
+            secretName: pedersensoftware-dot-com
+            defaultMode: 0777
+        - name: softwarehawaii-dot-com
+          secret:
+            secretName: softwarehawaii-dot-com
+            defaultMode: 0777
+        - name: softwareseattle-dot-com
+          secret:
+            secretName: softwareseattle-dot-com
+            defaultMode: 0777
+        - name: derekpedersen-dot-com
+          secret:
+            secretName: derekpedersen-dot-com
+            defaultMode: 0777
+        # - name: derekpedersen-dot-io
+        #   secret:
+        #     secretName: derekpedersen-dot-io
+        #     defaultMode: 0777

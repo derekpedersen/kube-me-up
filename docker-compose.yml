@@ -1,0 +1,17 @@
+version: '2'
+services:
+ nginx-proxy:
+  links:
+   - api-go:api-go
+   - spa-angular:spa-angular
+  image: nginx-proxy
+  ports:
+  - "80:80"
+ api-go:
+  image: api-go
+  ports:
+   - "8080:8080"
+ spa-angular:
+  image: spa-angular
+  ports:
+   - "4200:4200"
