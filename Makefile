@@ -1,5 +1,5 @@
 build:
-	docker build ./ -t nginx-proxy
+	docker build --no-cache ./ -t nginx-proxy
 
 deploy:
 	docker tag nginx-proxy us.gcr.io/derekpedersen-195304/nginx-proxy:latest

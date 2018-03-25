@@ -43,8 +43,17 @@ server {
                 #try_files $uri $uri/Index.html $uri/ /Index.html;
         }
 
-        location /api {
+        location /api/resume {
                 proxy_pass http://api-go-service:8080;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+        }
+
+        location /api/skatepark {
+                proxy_pass http://skatepark-api-go-service:8080;
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection 'upgrade';
