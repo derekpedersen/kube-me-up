@@ -1,11 +1,11 @@
 build:
 	docker build ./ -t nginx-proxy
 
-publish:
+deploy:
 	docker tag nginx-proxy us.gcr.io/derekpedersen-195304/nginx-proxy:latest
 	gcloud docker -- push us.gcr.io/derekpedersen-195304/nginx-proxy:latest
 
-deploy:
+publish:
 	kubectl delete deployment nginx-proxy-deployment
 	kubectl create -f ./kubernetes/deployment.yaml
 
