@@ -44,7 +44,7 @@ server {
         }
 
         location /api/resume {
-                proxy_pass http://api-go-service:8080;
+                proxy_pass http://resume-api-dotnetcore-service:80;
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection 'upgrade';
