@@ -30,7 +30,7 @@ server {
         server_name celebrityskateboards.com www.celebrityskateboards.com;
 
         location / {
-                proxy_pass http://derekpedersen-spa-angular-service:4200;
+                proxy_pass http://celebrityskateboards-spa-angular-service:4200;
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection 'upgrade';
@@ -41,15 +41,6 @@ server {
                 # as directory, then fall back to displaying a 404.
                 #try_files $uri $uri/Index.html $uri/ =404;
                 #try_files $uri $uri/Index.html $uri/ /Index.html;
-        }
-
-        location /api/resume {
-                proxy_pass http://resume-api-dotnetcore-service:80;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection 'upgrade';
-                proxy_set_header Host $host;
-                proxy_cache_bypass $http_upgrade;
         }
 
         location /api/skatepark {
