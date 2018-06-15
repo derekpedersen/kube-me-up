@@ -26,6 +26,8 @@ spec:
             mountPath: /etc/ssl_cert/softwareseattle.com
           - name: derekpedersen-dot-com
             mountPath: /etc/ssl_cert/derekpedersen.com
+          - name: jenkins-derekpedersen-dot-com
+            mountPath: /etc/ssl_cert/jenkins.derekpedersen.com
           # - name: derekpedersen-dot-io
           #   mountPath: /etc/ssl_cert/derekpedersen.io
       volumes:
@@ -48,6 +50,10 @@ spec:
         - name: derekpedersen-dot-com
           secret:
             secretName: derekpedersen-dot-com
+            defaultMode: 0777
+        - name: jenkins-derekpedersen-dot-com
+          secret:
+            secretName: jenkins-derekpedersen-dot-com
             defaultMode: 0777
         # - name: derekpedersen-dot-io
         #   secret:

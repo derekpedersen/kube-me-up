@@ -11,5 +11,8 @@ ADD /nginx-proxy/nginx.conf /etc/nginx/
 RUN mkdir /etc/nginx/sites-enabled
 COPY nginx-proxy/sites-available/* /etc/nginx/sites-enabled/
 
+# Copy htpasswd file
+COPY nginx-proxy/.htpasswd /etc/nginx/
+
 # Expose the port the app runs in
 EXPOSE 80

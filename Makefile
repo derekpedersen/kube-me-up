@@ -11,3 +11,6 @@ deploy:
 
 delete:
 	kubectl delete deployment nginx-proxy-deployment
+
+kubernetes: build publish deploy
+
