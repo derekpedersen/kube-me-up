@@ -6,8 +6,7 @@ publish:
 	gcloud docker -- push us.gcr.io/derekpedersen-195304/nginx-proxy:latest
 
 deploy:
-	kubectl delete deployment nginx-proxy-deployment
-	kubectl create -f ./kubernetes/deployment.yaml
+	kubectl apply -f ./kubernetes/deployment.yaml
 
 delete:
 	kubectl delete deployment nginx-proxy-deployment
