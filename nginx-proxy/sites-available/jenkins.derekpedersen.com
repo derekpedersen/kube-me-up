@@ -12,8 +12,8 @@ server {
     ssl_certificate_key /etc/ssl_cert/jenkins.derekpedersen.com/tls.key;
  
     location / {
-        auth_basic "Restricted Content";
-        auth_basic_user_file /etc/nginx/.htpasswd;
+        #auth_basic "Restricted Content";
+        #auth_basic_user_file /etc/nginx/.htpasswd;
 
         proxy_pass http://jenkins-ui:8080/;
         proxy_http_version 1.1;
