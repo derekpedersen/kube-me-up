@@ -41,6 +41,8 @@ server {
                 # as directory, then fall back to displaying a 404.
                 #try_files $uri $uri/Index.html $uri/ =404;
                 #try_files $uri $uri/Index.html $uri/ /Index.html;
+                gzip_static on;
+                expires 31d;
         }
 
         location /api/skatepark {
