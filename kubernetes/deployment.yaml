@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
       - name: nginx-proxy
-        image: us.gcr.io/derekpedersen-195304/nginx-proxy:latest
+        image: us.gcr.io/${GCLOUD_PROJECT_ID}/nginx-proxy:latest
         ports:
         - containerPort: 80
         - containerPort: 443

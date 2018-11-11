@@ -9,8 +9,8 @@
 - docker run -d --rm -it -p 80:80 --name=nginx-proxy-container -t nginx-proxy
 
 ## GCR
-- docker tag nginx-proxy us.gcr.io/derekpedersen-195304/nginx-proxy:latest
-- gcloud docker -- push us.gcr.io/derekpedersen-195304/nginx-proxy:latest
+- docker tag nginx-proxy us.gcr.io/${GCLOUD_PROJECT_ID}/nginx-proxy:latest
+- gcloud docker -- push us.gcr.io/${GCLOUD_PROJECT_ID}/nginx-proxy:latest
 
 # Kubernetes
 
