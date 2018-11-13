@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
       - name: nginx-proxy
-        image: us.gcr.io/${GCLOUD_PROJECT_ID}/nginx-proxy:${GIT_COMMIT_SHA}
+        image: us.gcr.io/%GCLOUD_PROJECT_ID%/nginx-proxy:%GIT_COMMIT_SHA%
         ports:
         - containerPort: 80
         - containerPort: 443
