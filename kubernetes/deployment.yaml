@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
       - name: nginx-proxy
-        image: us.gcr.io/${GCLOUD_PROJECT_ID}/nginx-proxy:latest
+        image: us.gcr.io/${GCLOUD_PROJECT_ID}/nginx-proxy:${GIT_COMMIT_SHA}
         ports:
         - containerPort: 80
         - containerPort: 443
@@ -28,8 +28,8 @@ spec:
             mountPath: /etc/ssl_cert/derekpedersen.com
           - name: jenkins-derekpedersen-dot-com
             mountPath: /etc/ssl_cert/jenkins.derekpedersen.com
-          # - name: derekpedersen-dot-io
-          #   mountPath: /etc/ssl_cert/derekpedersen.io
+          - name: derekpedersen-dot-io
+            mountPath: /etc/ssl_cert/derekpedersen.io
       volumes:
         - name: celebrityskateboards-dot-com
           secret:
@@ -55,7 +55,7 @@ spec:
           secret:
             secretName: jenkins-derekpedersen-dot-com
             defaultMode: 0777
-        # - name: derekpedersen-dot-io
-        #   secret:
-        #     secretName: derekpedersen-dot-io
-        #     defaultMode: 0777
+        - name: derekpedersen-dot-io
+          secret:
+            secretName: derekpedersen-dot-io
+            defaultMode: 0777
