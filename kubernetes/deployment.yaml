@@ -30,6 +30,8 @@ spec:
             mountPath: /etc/ssl_cert/jenkins.derekpedersen.com
           - name: derekpedersen-dot-io
             mountPath: /etc/ssl_cert/derekpedersen.io
+          - name: jenkins-derekpedersen-dot-io
+            mountPath: /etc/ssl_cert/jenkins.derekpedersen.io
       volumes:
         - name: celebrityskateboards-dot-com
           secret:
@@ -58,4 +60,8 @@ spec:
         - name: derekpedersen-dot-io
           secret:
             secretName: derekpedersen-dot-io
+            defaultMode: 0777
+        - name: jenkins-derekpedersen-dot-io
+          secret:
+            secretName: jenkins-derekpedersen-dot-io
             defaultMode: 0777

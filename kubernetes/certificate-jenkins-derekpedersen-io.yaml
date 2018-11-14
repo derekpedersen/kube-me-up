@@ -1,0 +1,13 @@
+apiVersion: "stable.k8s.psg.io/v1"
+kind: "Certificate"
+metadata:
+  name: "jenkins-derekpedersen-dot-io"
+  labels:
+    stable.k8s.psg.io/kcm.class: "default"
+spec:
+  domain: "jenkins.derekpedersen.io"
+  email: "derekpedersen.contact@gmail.com"
+  provider: "googlecloud"
+  secretName: jenkins-derekpedersen-dot-io
+  altNames:
+    - "jenkins.derekpedersen.io"
