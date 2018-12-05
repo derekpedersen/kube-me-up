@@ -6,7 +6,7 @@ metadata:
     stable.k8s.psg.io/kcm.class: "default"
 spec:
   domain: "jupyter.derekpedersen.io"
-  email: "derekpedersen.contact@gmail.io"
+  email: "derekpedersen.contact@gmail.com"
   provider: "googlecloud"
   secretName: jupyter-derekpedersen-dot-io
   altNames:
