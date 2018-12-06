@@ -15,7 +15,7 @@ server {
         #auth_basic "Restricted Content";
         #auth_basic_user_file /etc/nginx/.htpasswd;
 
-        proxy_pass http://jupyterhub-service:8000/;
+        proxy_pass http://jupyter-hub-service:8000/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
