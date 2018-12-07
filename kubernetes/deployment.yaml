@@ -32,6 +32,8 @@ spec:
             mountPath: /etc/ssl_cert/derekpedersen.io
           - name: jenkins-derekpedersen-dot-io
             mountPath: /etc/ssl_cert/jenkins.derekpedersen.io
+          - name: jupyter-derekpedersen-dot-io
+            mountPath: /etc/ssl_cert/jupyter.derekpedersen.io
       volumes:
         - name: celebrityskateboards-dot-com
           secret:
@@ -64,4 +66,8 @@ spec:
         - name: jenkins-derekpedersen-dot-io
           secret:
             secretName: jenkins-derekpedersen-dot-io
+            defaultMode: 0777
+        - name: jupyter-derekpedersen-dot-io
+          secret:
+            secretName: jupyter-derekpedersen-dot-io
             defaultMode: 0777
