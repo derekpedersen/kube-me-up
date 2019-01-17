@@ -1,7 +1,7 @@
 server {
     listen 80;
     server_name jenkins.derekpedersen.io;
-    return 301 https://$host$request_uri;
+	return 301 https://jenkins.derekpedersen.io$request_uri;
 }
  
 server {
