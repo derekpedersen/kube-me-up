@@ -2,7 +2,7 @@
 server {
 	listen 80;
 	server_name derekpedersen.com www.derekpedersen.com;
-	return 301 https://derekpedersen.com$request_uri;
+	return 301 https://derekpedersen.io$request_uri;
 }
 
 # SSL Server Configuration
@@ -28,43 +28,5 @@ server {
         #root /var/www/derekpedersen.com;
 
         server_name derekpedersen.com www.derekpedersen.com;
-
-        location / {
-                proxy_pass http://derekpedersen-spa-angular-service:4200;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection 'upgrade';
-                proxy_set_header Host $host;
-                proxy_cache_bypass $http_upgrade;
-
-                # First attempt to serve request as file, then
-                # as directory, then fall back to displaying a 404.
-                #try_files $uri $uri/Index.html $uri/ =404;
-                #try_files $uri $uri/Index.html $uri/ /Index.html;
-        }
-
-        location /api/resume {
-                proxy_pass http://resume-api-dotnetcore-service:80;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection 'upgrade';
-                proxy_set_header Host $host;
-                proxy_cache_bypass $http_upgrade;
-        }
-
-        location /api/skatepark {
-                proxy_pass http://skatepark-api-go-service:8080;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection 'upgrade';
-                proxy_set_header Host $host;
-                proxy_cache_bypass $http_upgrade;
-        }
-
-        # deny access to .htaccess files, if Apache's document root
-        # concurs with nginx's one
-        #
-        #location ~ /\.ht {
-        #       deny all;
-        #}
+	return 301 https://derekpedersen.io$request_uri;
 }
