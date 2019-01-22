@@ -15,6 +15,13 @@ spec:
         ports:
         - containerPort: 80
         - containerPort: 443
+        resources:
+          limits:
+            cpu: "50m"
+            memory: "50Mi"
+          requests:
+            cpu: "10m"
+            memory: "10Mi"
         volumeMounts:
           - name: celebrityskateboards-dot-com
             mountPath: /etc/ssl_cert/celebrityskateboards.com
