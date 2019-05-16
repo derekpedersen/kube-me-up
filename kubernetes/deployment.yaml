@@ -25,12 +25,6 @@ spec:
         volumeMounts:
           - name: celebrityskateboards-dot-com
             mountPath: /etc/ssl_cert/celebrityskateboards.com
-          - name: pedersensoftware-dot-com
-            mountPath: /etc/ssl_cert/pedersensoftware.com
-          - name: softwarehawaii-dot-com
-            mountPath: /etc/ssl_cert/softwarehawaii.com
-          - name: softwareseattle-dot-com
-            mountPath: /etc/ssl_cert/softwareseattle.com
           - name: derekpedersen-dot-com
             mountPath: /etc/ssl_cert/derekpedersen.com
           - name: jenkins-derekpedersen-dot-com
@@ -45,18 +39,6 @@ spec:
         - name: celebrityskateboards-dot-com
           secret:
             secretName: celebrityskateboards-dot-com
-            defaultMode: 0777
-        - name: pedersensoftware-dot-com
-          secret:
-            secretName: pedersensoftware-dot-com
-            defaultMode: 0777
-        - name: softwarehawaii-dot-com
-          secret:
-            secretName: softwarehawaii-dot-com
-            defaultMode: 0777
-        - name: softwareseattle-dot-com
-          secret:
-            secretName: softwareseattle-dot-com
             defaultMode: 0777
         - name: derekpedersen-dot-com
           secret:
