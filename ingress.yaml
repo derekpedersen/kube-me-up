@@ -1,0 +1,21 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: dp-spa-vue-test
+          servicePort: 80
+        path: /
+  # - host: hw2.your_domain
+  #   http:
+  #     paths:
+  #     - backend:
+  #         serviceName: hello-kubernetes-second
+  #         servicePort: 80
