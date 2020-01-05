@@ -9,6 +9,7 @@ spec:
   tls:
     - hosts:
       - pedersen.io
+      # - jenkins.pedersen.io
       secretName: pedersen-io-tls
   rules:
   - host: pedersen.io
@@ -18,9 +19,17 @@ spec:
           serviceName: dp-spa-vue-test
           servicePort: 80
         path: /
+  - host: jenkins.pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: jenkins-1578171870
+          servicePort: 8080
+        path: /
   # - host: hw2.your_domain
   #   http:
   #     paths:
   #     - backend:
   #         serviceName: hello-kubernetes-second
   #         servicePort: 80
+  #jenkins-1578171870
