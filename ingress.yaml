@@ -9,12 +9,16 @@ spec:
   tls:
     - hosts:
       - pedersen.io
-      # - jenkins.pedersen.io
+      - jenkins.pedersen.io
       secretName: pedersen-io-tls
   rules:
   - host: pedersen.io
     http:
       paths:
+      - backend:
+          serviceName: skatepark-api
+          servicePort: 8080
+        path: /api/skateparks
       - backend:
           serviceName: dp-spa-vue-test
           servicePort: 80
@@ -32,4 +36,3 @@ spec:
   #     - backend:
   #         serviceName: hello-kubernetes-second
   #         servicePort: 80
-  #jenkins-1578171870
