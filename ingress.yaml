@@ -11,6 +11,9 @@ spec:
       - pedersen.io
       - jenkins.pedersen.io
       secretName: pedersen-io-tls
+    - hosts:
+      - celebrityskateboards.com
+      secretName: celebrityskateboards-tls
   rules:
   - host: pedersen.io
     http:
@@ -30,9 +33,14 @@ spec:
           serviceName: jenkins-1578171870
           servicePort: 8080
         path: /
-  # - host: hw2.your_domain
-  #   http:
-  #     paths:
-  #     - backend:
-  #         serviceName: hello-kubernetes-second
-  #         servicePort: 80
+  - host: celebrityskateboards.com
+    http:
+      paths:
+      - backend:
+          serviceName: skatepark-api
+          servicePort: 8080
+        path: /api/skateparks
+      - backend:
+          serviceName: dp-spa-vue-test
+          servicePort: 80
+        path: /
