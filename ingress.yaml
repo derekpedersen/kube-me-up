@@ -1,0 +1,46 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+      - pedersen.io
+      - jenkins.pedersen.io
+      secretName: pedersen-io-tls
+    - hosts:
+      - celebrityskateboards.com
+      secretName: celebrityskateboards-tls
+  rules:
+  - host: pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: skatepark-api
+          servicePort: 8080
+        path: /api/skateparks
+      - backend:
+          serviceName: dp-spa-vue-test
+          servicePort: 80
+        path: /
+  - host: jenkins.pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: jenkins-1578171870
+          servicePort: 8080
+        path: /
+  - host: celebrityskateboards.com
+    http:
+      paths:
+      - backend:
+          serviceName: skatepark-api
+          servicePort: 8080
+        path: /api/skateparks
+      - backend:
+          serviceName: dp-spa-vue-test
+          servicePort: 80
+        path: /
