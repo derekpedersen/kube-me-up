@@ -41,6 +41,6 @@ spec:
           servicePort: 8080
         path: /api/skateparks
       - backend:
-          serviceName: dp-spa-vue-test
+          serviceName: celebrityskateboards
           servicePort: 80
         path: /
