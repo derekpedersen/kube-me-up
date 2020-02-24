@@ -54,6 +54,10 @@ spec:
           serviceName: dp-spa-angular
           servicePort: 80
         path: /
+      - backend:
+          serviceName: resume-api-dotnetcore
+          servicePort: 80
+        path: /api
   - host: celebrityskateboards.com
     http:
       paths:
