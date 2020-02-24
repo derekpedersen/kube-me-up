@@ -9,13 +9,27 @@ spec:
   tls:
     - hosts:
       - pedersen.io
+      - www.pedersen.io
       - jenkins.pedersen.io
+      - derek.pedersen.io
       secretName: pedersen-io-tls
     - hosts:
       - celebrityskateboards.com
+      - www.celebrityskateboards.com
       secretName: celebrityskateboards-tls
   rules:
   - host: pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: skatepark-api
+          servicePort: 8080
+        path: /api/skateparks
+      - backend:
+          serviceName: dp-spa-vue-test
+          servicePort: 80
+        path: /
+  - host: www.pedersen.io
     http:
       paths:
       - backend:
@@ -33,7 +47,25 @@ spec:
           serviceName: jenkins-1578171870
           servicePort: 8080
         path: /
+  - host: derek.pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: dp-spa-angular
+          servicePort: 80
+        path: /
   - host: celebrityskateboards.com
+    http:
+      paths:
+      - backend:
+          serviceName: skatepark-api
+          servicePort: 8080
+        path: /api/skateparks
+      - backend:
+          serviceName: celebrityskateboards
+          servicePort: 80
+        path: /
+  - host: www.celebrityskateboards.com
     http:
       paths:
       - backend:
