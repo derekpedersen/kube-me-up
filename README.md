@@ -39,5 +39,6 @@ Here are the steps to adding a new site:
           servicePort: 80
         path: /
     ```
-3. Your application should now be exposed to the interwebs!    
+3. `kubectl apply -f ingress.yaml` 
+4. Your application should now be exposed to the interwebs!    
 

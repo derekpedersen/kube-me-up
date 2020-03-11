@@ -12,6 +12,7 @@ spec:
       - www.pedersen.io
       - jenkins.pedersen.io
       - derek.pedersen.io
+      - jasper.pedersen.io
       secretName: pedersen-io-tls
     - hosts:
       - celebrityskateboards.com
@@ -58,6 +59,13 @@ spec:
           serviceName: resume-api-dotnetcore
           servicePort: 80
         path: /api
+  - host: jasper.pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: jp-spa-react
+          servicePort: 80
+        path: /
   - host: celebrityskateboards.com
     http:
       paths:
