@@ -18,7 +18,17 @@ spec:
       - celebrityskateboards.com
       - www.celebrityskateboards.com
       secretName: celebrityskateboards-tls
+    - hosts:
+      - pedersen.app
+      secretName: pedersen-app-tls
   rules:
+  - host: pedersen.app
+    http:
+      paths:
+        - backend:
+            serviceName: video-playback-server
+            servicePort: 8080
+          path: /video-playback
   - host: pedersen.io
     http:
       paths:
