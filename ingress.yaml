@@ -13,6 +13,7 @@ spec:
       - jenkins.pedersen.io
       - derek.pedersen.io
       - jasper.pedersen.io
+      - marissa.pedersen.io
       secretName: pedersen-io-tls
     - hosts:
       - celebrityskateboards.com
@@ -70,6 +71,13 @@ spec:
           servicePort: 80
         path: /api
   - host: jasper.pedersen.io
+    http:
+      paths:
+      - backend:
+          serviceName: jp-spa-react
+          servicePort: 80
+        path: /
+  - host: marissa.pedersen.io
     http:
       paths:
       - backend:
