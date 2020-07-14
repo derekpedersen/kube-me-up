@@ -56,7 +56,7 @@ spec:
     http:
       paths:
       - backend:
-          serviceName: jenkins-1578171870
+          serviceName: jenkins-1594685437
           servicePort: 8080
         path: /
   - host: derek.pedersen.io
