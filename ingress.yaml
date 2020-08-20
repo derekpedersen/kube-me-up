@@ -34,22 +34,14 @@ spec:
     http:
       paths:
       - backend:
-          serviceName: skatepark-api
-          servicePort: 8080
-        path: /api/skateparks
-      - backend:
-          serviceName: dp-spa-vue-test
+          serviceName: pedersen-spa
           servicePort: 80
         path: /
   - host: www.pedersen.io
     http:
       paths:
       - backend:
-          serviceName: skatepark-api
-          servicePort: 8080
-        path: /api/skateparks
-      - backend:
-          serviceName: dp-spa-vue-test
+          serviceName: pedersen-spa
           servicePort: 80
         path: /
   - host: jenkins.pedersen.io
