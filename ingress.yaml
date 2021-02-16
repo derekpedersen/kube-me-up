@@ -48,7 +48,7 @@ spec:
     http:
       paths:
       - backend:
-          serviceName: jenkins-1594685437
+          serviceName: jenkins-1597965510
           servicePort: 8080
         path: /
   - host: derek.pedersen.io
@@ -83,6 +83,10 @@ spec:
           serviceName: skatepark-api
           servicePort: 8080
         path: /api/skateparks
+      - backend:
+          serviceName: skatepark-api
+          servicePort: 3000
+        path: /api/skateparks/swagger
       - backend:
           serviceName: celebrityskateboards
           servicePort: 80
