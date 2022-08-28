@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: nginx-ingress
@@ -12,93 +12,97 @@ spec:
       - www.pedersen.io
       - jenkins.pedersen.io
       - derek.pedersen.io
-      - jasper.pedersen.io
-      - marissa.pedersen.io
       secretName: pedersen-io-tls
     - hosts:
       - celebrityskateboards.com
       - www.celebrityskateboards.com
       secretName: celebrityskateboards-tls
-    - hosts:
-      - pedersen.app
-      secretName: pedersen-app-tls
   rules:
-  - host: pedersen.app
-    http:
-      paths:
-        - backend:
-            serviceName: video-playback-server
-            servicePort: 8080
-          path: /video-playback
   - host: pedersen.io
     http:
       paths:
       - backend:
-          serviceName: pedersen-spa
-          servicePort: 80
+          service:
+            name: pedersen-spa
+            port:
+              number: 80
         path: /
+        pathType: ImplementationSpecific
   - host: www.pedersen.io
     http:
       paths:
       - backend:
-          serviceName: pedersen-spa
-          servicePort: 80
+          service:
+            name: pedersen-spa
+            port:
+              number: 80
         path: /
+        pathType: ImplementationSpecific
   - host: jenkins.pedersen.io
     http:
       paths:
       - backend:
-          serviceName: jenkins-1597965510
-          servicePort: 8080
+          service:
+            name: jenkins-1619548353
+            port:
+              number: 8080
         path: /
+        pathType: ImplementationSpecific
   - host: derek.pedersen.io
     http:
       paths:
       - backend:
-          serviceName: dp-spa-angular
-          servicePort: 80
+          service:
+            name: dp-spa-angular
+            port:
+              number: 80
         path: /
+        pathType: ImplementationSpecific
       - backend:
-          serviceName: resume-api-dotnetcore
-          servicePort: 80
+          service:
+            name: resume-api-dotnetcore
+            port:
+              number: 80
         path: /api
-  - host: jasper.pedersen.io
-    http:
-      paths:
-      - backend:
-          serviceName: jp-spa-react
-          servicePort: 80
-        path: /
-  - host: marissa.pedersen.io
-    http:
-      paths:
-      - backend:
-          serviceName: jp-spa-react
-          servicePort: 80
-        path: /
+        pathType: ImplementationSpecific
   - host: celebrityskateboards.com
     http:
       paths:
       - backend:
-          serviceName: skatepark-api
-          servicePort: 8080
+          service:
+            name: skatepark-api
+            port:
+              number: 8080
         path: /api/skateparks
+        pathType: ImplementationSpecific
       - backend:
-          serviceName: skatepark-api
-          servicePort: 3000
+          service:
+            name: skatepark-api
+            port:
+              number: 3000
         path: /api/skateparks/swagger
+        pathType: ImplementationSpecific
       - backend:
-          serviceName: celebrityskateboards
-          servicePort: 80
+          service:
+            name: celebrityskateboards
+            port:
+              number: 80
         path: /
+        pathType: ImplementationSpecific
   - host: www.celebrityskateboards.com
     http:
       paths:
       - backend:
-          serviceName: skatepark-api
-          servicePort: 8080
+          service:
+            name: skatepark-api
+            port:
+              number: 8080
         path: /api/skateparks
+        pathType: ImplementationSpecific
       - backend:
-          serviceName: celebrityskateboards
-          servicePort: 80
+          service:
+            name: celebrityskateboards
+            port:
+              number: 80
         path: /
+        pathType: ImplementationSpecific
