@@ -1,0 +1,14 @@
+version: "3"
+services:
+  web:
+    image: johnny-5-alive
+    deploy:
+      replicas: 1
+    ports:
+      - "9090:8080"
+    networks:
+      - webnet
+    environment:
+      - TEST_VAR
+networks:
+  webnet:
