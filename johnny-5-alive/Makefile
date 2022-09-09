@@ -4,7 +4,7 @@ build:
 	docker build ./ -t johnny-5-alive:latest --no-cache
 
 run: build
-	docker-compose up -d
+	docker run -d -p 9090:8080 johnny-5-alive:latest
 
 docker:
 	docker build ./ -t johnny-5-alive:latest --no-cache
