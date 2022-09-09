@@ -16,5 +16,7 @@ publish: docker
 set-version:
 	.helm/set-version.sh
 
-deploy: publish set-version
-	helm install johnny-5-alive .helm
+deploy: set-version
+	helm upgrade johnny-5-alive .helm
+
+kubernetes: build publish deploy
