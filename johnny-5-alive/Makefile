@@ -4,11 +4,8 @@ build:
 run: build
 	docker-compose up -d
 
-http-deploy:
-	helm install johnny-5-http .helm/http
-
-https-deploy:
-	helm install johnny-5-https .helm/https
+deploy:
+	helm upgrade johnny-5-http .helm
 
 set-version:
 	.helm/set-version.sh
