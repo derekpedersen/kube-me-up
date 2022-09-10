@@ -11,7 +11,8 @@ docker:
 
 publish: docker
 	docker tag johnny-5-alive us.gcr.io/sleipnir/johnny-5-alive:${GIT_COMMIT_SHA}
-	gcloud docker -- push us.gcr.io/sleipnir/johnny-5-alive:${GIT_COMMIT_SHA}
+	gcloud auth configure-docker
+	docker -- push us.gcr.io/sleipnir/johnny-5-alive:${GIT_COMMIT_SHA}
 
 set-version:
 	.helm/set-version.sh
