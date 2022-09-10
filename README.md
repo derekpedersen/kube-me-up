@@ -2,7 +2,7 @@
 
 Kube Me Up!
 
-This project is all about being able to quickly spin up a `kubernetes-scluster` with all the tools necessary to start handling web traffic. 
+This project is all about being able to quickly spin up a `kubernetes-cluster` with all the tools necessary to start handling web traffic. 
 
 ## GKE
 
@@ -12,11 +12,9 @@ The docs for getting started with `GKE` can be found [here](https://cloud.google
 
 The docs for getting started with `EKS` can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html).
 
-## Nginx Ingress
+## Ingress Nginx
 
-`nginx-ingress` allows us to configure an HTTP load balanger for applications running on our `kubernetes-cluster`.
-
-The `nginx-ingress` can be installed following these [instructions](https://docs.nginx.com/nginx-ingress-controller/installation/installation-with-helm/).
+`ingress-nginx` allows us to configure an HTTP load balanger for applications running on our `kubernetes-cluster`.
 
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && \
@@ -74,6 +72,20 @@ If TLS is enabled for the Ingress, a Secret containing the certificate and key m
   type: kubernetes.io/tls
 ```
 
+```bash
+helm list
+NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                                   APP VERSION                             
+quickstart              default         1               2022-09-08 17:29:06.468490172 -0700 PDT deployed        ingress-nginx-4.2.5                     1.3.1                                   
+```
+
+```bash
+kubectl get services
+NAME                                            TYPE           CLUSTER-IP     EXTERNAL-IP      PORT(S)                      AGE
+quickstart-ingress-nginx-controller             LoadBalancer   10.84.10.54    35.227.178.140   80:30912/TCP,443:32330/TCP   40h
+quickstart-ingress-nginx-controller-admission   ClusterIP      10.84.15.49    <none>           443/TCP                      40h
+```
+
+We can now update a `DNS` entry to point to `35.227.178.140`.
 
 ## Cert-Manager
 
@@ -117,3 +129,15 @@ https://cert-manager.io/docs/usage/ingress/
 Then run `kubectl apply -f cluster_issuer.yaml` to create the `ClusterIssuer`.
 
 [Quickstart](https://cert-manager.io/docs/tutorials/acme/nginx-ingress/) for working with `nginx ingress`.
+
+And if we use the `ingress` annotations as mentioned above we can make it a bit more dynamic.
+
+```bash
+kubectl get ingresses
+NAME                   CLASS    HOSTS                      ADDRESS          PORTS     AGE
+celebrityskateboards   <none>   celebrityskateboards.com   35.227.178.140   80, 443   23h
+johnny-5-alive         <none>   alive.pedersen.io          35.227.178.140   80, 443   23h
+pedersen-spa           <none>   pedersen.io                35.227.178.140   80, 443   24h
+skatepark-api          <none>   celebrityskateboards.com   35.227.178.140   80, 443   24h
+```
+And we can now service `SSL` traffice for those hosts. 
