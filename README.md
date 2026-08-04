@@ -12,15 +12,51 @@ The docs for getting started with `GKE` can be found [here](https://cloud.google
 
 The docs for getting started with `EKS` can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html).
 
+## DOKS
+
+The docs for getting started with `DOKS` can be found [here](https://docs.digitalocean.com/products/kubernetes/how-to/create-clusters/).
+
+If you are using the DigitalOcean CLI, the basic cluster creation flow is:
+
+```bash
+doctl kubernetes cluster create <cluster-name> --region <region> --version <version> --node-pool "name=<pool-name>;size=s-2vcpu-4gb;count=3"
+```
+
+Once the cluster is ready, configure kubectl with:
+
+```bash
+doctl kubernetes cluster kubeconfig save <cluster-name>
+```
+
+### DOKS-specific notes
+
+- DOKS works with the repo’s existing `johnny-5-alive` Helm chart and `cluster_issuer.yaml`.
+- The Helm chart default ingress settings use `ingress.className: nginx`, which matches the standard DOKS nginx ingress controller.
+- `cert-manager` HTTP01 challenge should work on DOKS as long as the nginx ingress controller is installed and reachable.
+- The app’s ingress will expose a DigitalOcean LoadBalancer IP, which you can point your DNS records at.
+
 ## Ingress Nginx
 
-`ingress-nginx` allows us to configure an HTTP load balanger for applications running on our `kubernetes-cluster`.
+`ingress-nginx` allows us to configure an HTTP load balancer for applications running on our `kubernetes-cluster`.
+
+On DOKS, install the nginx ingress controller and register the `nginx` class:
 
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && \
   helm repo update && \
-  helm install quickstart ingress-nginx/ingress-nginx
+  helm install ingress-nginx ingress-nginx/ingress-nginx \
+    --namespace ingress-nginx --create-namespace \
+    --set controller.ingressClassResource.name=nginx \
+    --set controller.ingressClassResource.default=true
 ```
+
+If you prefer the upstream manifest:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.1/deploy/static/provider/cloud/deploy.yaml
+```
+
+The chart and app defaults in this repo use `ingressClassName: nginx`, which is compatible with DOKS when the controller is installed this way.
 
 ```bash
 NAME: quickstart
@@ -89,55 +125,60 @@ We can now update a `DNS` entry to point to `35.227.178.140`.
 
 ## Cert-Manager
 
-`cert-manager` is a cloud native certificate manager that allows the `kubernetes-cluster` to seamlessly handle and enforce SSL. 
+`cert-manager` is a cloud native certificate manager that allows the `kubernetes-cluster` to seamlessly handle and enforce SSL.
 
-The `cert-manager` can be installed following these [instructions](https://cert-manager.io/docs/installation/helm/).
+On DOKS, install `cert-manager` with Helm and its CRDs:
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io && \
   helm repo update && \
-  helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.9.1 --set installCRDs=true
+  helm install cert-manager jetstack/cert-manager \
+    --namespace cert-manager --create-namespace \
+    --version v1.9.1 --set installCRDs=true
 ```
 
-Should give you a response similar to,
+After install, verify the cert-manager pods are running:
 
 ```bash
-NAME: cert-manager
-LAST DEPLOYED: Sun Aug 28 10:46:13 2022
-NAMESPACE: cert-manager
-STATUS: deployed
-REVISION: 1
-TEST SUITE: None
-NOTES:
-cert-manager v1.9.1 has been deployed successfully!
-
-In order to begin issuing certificates, you will need to set up a ClusterIssuer
-or Issuer resource (for example, by creating a 'letsencrypt-staging' issuer).
-
-More information on the different types of issuers and how to configure them
-can be found in our documentation:
-
-https://cert-manager.io/docs/configuration/
-
-For information on how to configure cert-manager to automatically provision
-Certificates for Ingress resources, take a look at the `ingress-shim`
-documentation:
-
-https://cert-manager.io/docs/usage/ingress/
+kubectl get pods -n cert-manager
 ```
 
-Then run `kubectl apply -f cluster_issuer.yaml` to create the `ClusterIssuer`.
+Then apply the issuer manifest from this repo:
+
+```bash
+kubectl apply -f cluster_issuer.yaml
+```
+
+The `cluster_issuer.yaml` in this repo uses ACME HTTP01 with the nginx ingress solver:
+
+```yaml
+spec:
+  acme:
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+```
+
+That is compatible with DOKS when the nginx ingress controller is installed and the ingress class is set to `nginx`.
+
+For DOKS, confirm the `johnny-5-alive` Helm ingress values include the cluster issuer annotation and nginx class:
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+```
+
+Then verify ingress and TLS state:
+
+```bash
+kubectl get ingress
+kubectl get clusterissuer letsencrypt-prod
+kubectl describe certificate
+```
 
 [Quickstart](https://cert-manager.io/docs/tutorials/acme/nginx-ingress/) for working with `nginx ingress`.
-
-And if we use the `ingress` annotations as mentioned above we can make it a bit more dynamic.
-
-```bash
-kubectl get ingresses
-NAME                   CLASS    HOSTS                      ADDRESS          PORTS     AGE
-celebrityskateboards   <none>   celebrityskateboards.com   35.227.178.140   80, 443   23h
-johnny-5-alive         <none>   alive.pedersen.io          35.227.178.140   80, 443   23h
-pedersen-spa           <none>   pedersen.io                35.227.178.140   80, 443   24h
-skatepark-api          <none>   celebrityskateboards.com   35.227.178.140   80, 443   24h
-```
-And we can now service `SSL` traffice for those hosts. 
