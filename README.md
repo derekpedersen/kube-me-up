@@ -182,3 +182,55 @@ kubectl describe certificate
 ```
 
 [Quickstart](https://cert-manager.io/docs/tutorials/acme/nginx-ingress/) for working with `nginx ingress`.
+
+## Metrics API (kubectl top)
+
+To enable `kubectl top node` and `kubectl top pod`, install the Kubernetes Metrics Server.
+
+On DOKS (and most managed clusters), this Helm install works well:
+
+```bash
+helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ && \
+  helm repo update && \
+  helm upgrade --install metrics-server metrics-server/metrics-server \
+    --namespace kube-system \
+    --set args={--kubelet-insecure-tls,--kubelet-preferred-address-types=InternalIP\,ExternalIP\,Hostname}
+```
+
+Then verify the API is ready:
+
+```bash
+kubectl get deployment metrics-server -n kube-system
+kubectl get apiservice v1beta1.metrics.k8s.io
+```
+
+Once the API reports as available, these commands should return usage metrics:
+
+```bash
+kubectl top node
+kubectl top pod -A
+```
+
+## Makefile Targets
+
+From the repo root, these aliases map to each Helm chart install:
+
+```bash
+make ingress      # installs ingress-nginx
+make certs        # installs cert-manager
+make metrics-api  # installs metrics-server
+```
+
+You can also run the explicit install targets:
+
+```bash
+make install-ingress-nginx
+make install-cert-manager
+make install-metrics-server
+```
+
+Master target to add/update repos and install all Helm charts:
+
+```bash
+make helm-charts
+```
