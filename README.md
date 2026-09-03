@@ -1,184 +1,166 @@
-# Kube-Me-Up 
+# Kube Me Up
 
-Kube Me Up!
+Kube Me Up is a fast path from "fresh cluster" to "traffic is live".
 
-This project is all about being able to quickly spin up a `kubernetes-cluster` with all the tools necessary to start handling web traffic. 
+Johnny 5 says: need input.
+This repo says: give it a Kubernetes cluster, and it will wire ingress, TLS, metrics, and a sample app so you can prove the stack works.
 
-## GKE
+## What This Installs
 
-The docs for getting started with `GKE` can be found [here](https://cloud.google.com/kubernetes-engine/docs/deploy-app-cluster).
+1. `ingress-nginx` for HTTP/HTTPS routing.
+2. `cert-manager` + Let's Encrypt ClusterIssuer for automated TLS.
+3. `metrics-server` for `kubectl top` and autoscaling inputs.
+4. `johnny-5-alive` sample app deployed through Helm.
 
-## EKS
+## Quick Start
 
-The docs for getting started with `EKS` can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html).
-
-## DOKS
-
-The docs for getting started with `DOKS` can be found [here](https://docs.digitalocean.com/products/kubernetes/how-to/create-clusters/).
-
-If you are using the DigitalOcean CLI, the basic cluster creation flow is:
+Recommended path is the guided installer:
 
 ```bash
-doctl kubernetes cluster create <cluster-name> --region <region> --version <version> --node-pool "name=<pool-name>;size=s-2vcpu-4gb;count=3"
+chmod +x install.sh
+./install.sh
 ```
 
-Once the cluster is ready, configure kubectl with:
+The script will prompt for cluster mode, domain, TLS email, and deployment mode.
+
+Install directly from GitHub raw:
 
 ```bash
-doctl kubernetes cluster kubeconfig save <cluster-name>
+curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash
 ```
 
-### DOKS-specific notes
-
-- DOKS works with the repo’s existing `johnny-5-alive` Helm chart and `cluster_issuer.yaml`.
-- The Helm chart default ingress settings use `ingress.className: nginx`, which matches the standard DOKS nginx ingress controller.
-- `cert-manager` HTTP01 challenge should work on DOKS as long as the nginx ingress controller is installed and reachable.
-- The app’s ingress will expose a DigitalOcean LoadBalancer IP, which you can point your DNS records at.
-
-## Ingress Nginx
-
-`ingress-nginx` allows us to configure an HTTP load balancer for applications running on our `kubernetes-cluster`.
-
-On DOKS, install the nginx ingress controller and register the `nginx` class:
+Install from GitHub raw and pass flags:
 
 ```bash
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && \
-  helm repo update && \
-  helm install ingress-nginx ingress-nginx/ingress-nginx \
-    --namespace ingress-nginx --create-namespace \
-    --set controller.ingressClassResource.name=nginx \
-    --set controller.ingressClassResource.default=true
+curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash -s -- --use-existing-cluster --deploy-mode kubernetes
 ```
 
-If you prefer the upstream manifest:
+Preview all actions without executing anything:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.1/deploy/static/provider/cloud/deploy.yaml
+./install.sh --dry-run --use-existing-cluster
 ```
 
-The chart and app defaults in this repo use `ingressClassName: nginx`, which is compatible with DOKS when the controller is installed this way.
+Resume from a partially completed environment with explicit step skips:
 
 ```bash
-NAME: quickstart
-LAST DEPLOYED: Thu Sep  8 17:29:06 2022
-NAMESPACE: default
-STATUS: deployed
-REVISION: 1
-TEST SUITE: None
-NOTES:
-The ingress-nginx controller has been installed.
-It may take a few minutes for the LoadBalancer IP to be available.
-You can watch the status by running 'kubectl --namespace default get services -o wide -w quickstart-ingress-nginx-controller'
-
-An example Ingress that makes use of the controller:
-  apiVersion: networking.k8s.io/v1
-  kind: Ingress
-  metadata:
-    name: example
-    namespace: foo
-  spec:
-    ingressClassName: nginx
-    rules:
-      - host: www.example.com
-        http:
-          paths:
-            - pathType: Prefix
-              backend:
-                service:
-                  name: exampleService
-                  port:
-                    number: 80
-              path: /
-    # This section is only required if TLS is to be enabled for the Ingress
-    tls:
-      - hosts:
-        - www.example.com
-        secretName: example-tls
-
-If TLS is enabled for the Ingress, a Secret containing the certificate and key must also be provided:
-
-  apiVersion: v1
-  kind: Secret
-  metadata:
-    name: example-tls
-    namespace: foo
-  data:
-    tls.crt: <base64 encoded cert>
-    tls.key: <base64 encoded key>
-  type: kubernetes.io/tls
+./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes
 ```
 
-```bash
-helm list
-NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART                                   APP VERSION                             
-quickstart              default         1               2022-09-08 17:29:06.468490172 -0700 PDT deployed        ingress-nginx-4.2.5                     1.3.1                                   
+For full manual steps, use [RUNBOOK.md](RUNBOOK.md).
+
+## Architecture
+
+```mermaid
+flowchart TD
+    U[Internet Users] --> DNS[DNS A/AAAA Record]
+    DNS --> LB[Cloud LoadBalancer]
+    LB --> NGINX[ingress-nginx controller]
+    NGINX --> APP[johnny-5-alive service]
+    APP --> POD[johnny-5-alive pod]
+
+    CM[cert-manager] --> ISSUER[ClusterIssuer letsencrypt-prod]
+    ISSUER --> NGINX
+
+    METRICS[metrics-server] --> K8S[Kubernetes API]
+    K8S --> OPS[kubectl top / HPA signals]
 ```
 
-```bash
-kubectl get services
-NAME                                            TYPE           CLUSTER-IP     EXTERNAL-IP      PORT(S)                      AGE
-quickstart-ingress-nginx-controller             LoadBalancer   10.84.10.54    35.227.178.140   80:30912/TCP,443:32330/TCP   40h
-quickstart-ingress-nginx-controller-admission   ClusterIP      10.84.15.49    <none>           443/TCP                      40h
-```
+## Prerequisites
 
-We can now update a `DNS` entry to point to `35.227.178.140`.
+- `kubectl`
+- `helm`
+- `docker`
+- `make`
+- `git`
+- `doctl` only if you want installer-managed DOKS cluster creation
 
-## Cert-Manager
+Cloud docs for manual cluster setup:
 
-`cert-manager` is a cloud native certificate manager that allows the `kubernetes-cluster` to seamlessly handle and enforce SSL.
+- GKE: https://cloud.google.com/kubernetes-engine/docs/deploy-app-cluster
+- EKS: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html
+- DOKS: https://docs.digitalocean.com/products/kubernetes/how-to/create-clusters/
 
-On DOKS, install `cert-manager` with Helm and its CRDs:
+## Manual Install (Fast Path)
 
-```bash
-helm repo add jetstack https://charts.jetstack.io && \
-  helm repo update && \
-  helm install cert-manager jetstack/cert-manager \
-    --namespace cert-manager --create-namespace \
-    --version v1.9.1 --set installCRDs=true
-```
-
-After install, verify the cert-manager pods are running:
+From repo root:
 
 ```bash
-kubectl get pods -n cert-manager
-```
-
-Then apply the issuer manifest from this repo:
-
-```bash
+make helm-charts
 kubectl apply -f cluster_issuer.yaml
+helm upgrade --install johnny-5-alive johnny-5-alive/.helm
 ```
 
-The `cluster_issuer.yaml` in this repo uses ACME HTTP01 with the nginx ingress solver:
-
-```yaml
-spec:
-  acme:
-    solvers:
-    - http01:
-        ingress:
-          class: nginx
-```
-
-That is compatible with DOKS when the nginx ingress controller is installed and the ingress class is set to `nginx`.
-
-For DOKS, confirm the `johnny-5-alive` Helm ingress values include the cluster issuer annotation and nginx class:
-
-```yaml
-ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    kubernetes.io/ingress.class: "nginx"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-```
-
-Then verify ingress and TLS state:
+Then verify:
 
 ```bash
-kubectl get ingress
+kubectl get ingressclass nginx
 kubectl get clusterissuer letsencrypt-prod
-kubectl describe certificate
+kubectl get pods -n cert-manager
+kubectl get pods -l app.kubernetes.io/name=johnny-5-alive
 ```
 
-[Quickstart](https://cert-manager.io/docs/tutorials/acme/nginx-ingress/) for working with `nginx ingress`.
+## Deploy Modes
+
+### Kubernetes Deploy
+
+Deploy `johnny-5-alive` via Helm into your current kube context.
+
+```bash
+helm upgrade --install johnny-5-alive johnny-5-alive/.helm
+```
+
+### Local Docker Run
+
+Run the sample app without Kubernetes:
+
+```bash
+cd johnny-5-alive
+make run
+```
+
+App is reachable at `http://localhost:9090`.
+
+## Configuration Points
+
+- TLS issuer template: `cluster_issuer.yaml`
+- App chart defaults: `johnny-5-alive/.helm/values.yaml`
+- Infra install targets: `Makefile`
+
+The installer generates runtime override manifests so your tracked files stay clean by default.
+
+## Verification Checklist
+
+```bash
+kubectl get nodes
+kubectl get svc -n ingress-nginx
+kubectl get clusterissuer letsencrypt-prod
+kubectl get ingress
+kubectl top node
+```
+
+If you configured DNS + domain correctly, HTTPS should come online after the ACME challenge completes.
+
+## Troubleshooting
+
+- Ingress has no address: verify `ingress-nginx-controller` service is `LoadBalancer` and allocated.
+- Cert not issuing: verify DNS points to load balancer and check `kubectl get challenges -A`.
+- App not reachable: verify ingress host in chart values or installer overrides.
+
+Detailed troubleshooting and recovery commands live in [RUNBOOK.md](RUNBOOK.md).
+
+## One-Liner
+
+When the cluster is ready and you want action:
+
+```bash
+./install.sh --use-existing-cluster --deploy-mode kubernetes
+```
+
+When you need to rerun only the app deploy:
+
+```bash
+./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes
+```
+
+No disassemble. Only deploy.
