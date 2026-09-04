@@ -15,6 +15,12 @@ DOMAIN=""
 DEPLOY_MODE=""
 IMAGE_REPOSITORY=""
 IMAGE_TAG=""
+WITH_OBSERVABILITY=false
+SKIP_OBSERVABILITY=false
+ENABLE_HPA=false
+HPA_MIN_REPLICAS=2
+HPA_MAX_REPLICAS=10
+HPA_TARGET_CPU=80
 DRY_RUN=false
 SKIP_CLUSTER=false
 SKIP_INFRA=false
@@ -57,6 +63,8 @@ Options:
   --use-existing-cluster       Skip cluster creation and use current kubeconfig context
   --skip-cluster               Resume mode: skip cluster provisioning/connectivity step
   --skip-infra                 Resume mode: skip infrastructure install step
+  --with-observability         Install Prometheus + Grafana (kube-prometheus-stack)
+  --skip-observability         Resume mode: skip observability install step
   --skip-issuer                Resume mode: skip ClusterIssuer apply step
   --skip-app                   Resume mode: skip application deployment step
   --cluster-name NAME          Cluster name (default: kube-me-up)
@@ -66,6 +74,10 @@ Options:
   --deploy-mode MODE           kubernetes|docker|skip
   --image-repository REPO      Optional Helm override for image.repository
   --image-tag TAG              Optional Helm override for image.tag
+  --enable-hpa                 Enable HorizontalPodAutoscaler for johnny-5-alive (Kubernetes mode)
+  --hpa-min-replicas N         HPA minimum replicas (default: 2)
+  --hpa-max-replicas N         HPA maximum replicas (default: 10)
+  --hpa-target-cpu N           HPA target CPU utilization percent (default: 80)
   --dry-run                    Print commands without executing
   --non-interactive            Require all needed flags, no prompts
   --yes                        Auto-confirm prompts
@@ -76,6 +88,7 @@ Examples:
   ./install.sh --dry-run --use-existing-cluster
   ./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes --skip-issuer
   ./install.sh --use-existing-cluster --domain alive.example.com --email you@example.com
+  ./install.sh --use-existing-cluster --deploy-mode kubernetes --with-observability --enable-hpa --domain alive.example.com --email you@example.com
   ./install.sh --cluster-name kube-me-up --region nyc3
 EOF
 }
@@ -86,6 +99,10 @@ require_cmd() {
     log_error "Missing required command: $cmd"
     exit 1
   fi
+}
+
+is_positive_int() {
+  [[ "$1" =~ ^[1-9][0-9]*$ ]]
 }
 
 run_cmd() {
@@ -171,6 +188,14 @@ parse_args() {
         SKIP_INFRA=true
         shift
         ;;
+      --with-observability)
+        WITH_OBSERVABILITY=true
+        shift
+        ;;
+      --skip-observability)
+        SKIP_OBSERVABILITY=true
+        shift
+        ;;
       --skip-issuer)
         SKIP_ISSUER=true
         shift
@@ -201,6 +226,22 @@ parse_args() {
         ;;
       --image-tag)
         IMAGE_TAG="${2:-}"
+        shift 2
+        ;;
+      --enable-hpa)
+        ENABLE_HPA=true
+        shift
+        ;;
+      --hpa-min-replicas)
+        HPA_MIN_REPLICAS="${2:-}"
+        shift 2
+        ;;
+      --hpa-max-replicas)
+        HPA_MAX_REPLICAS="${2:-}"
+        shift 2
+        ;;
+      --hpa-target-cpu)
+        HPA_TARGET_CPU="${2:-}"
         shift 2
         ;;
       --dry-run)
@@ -237,6 +278,10 @@ normalize_settings() {
 
   if [[ "$DEPLOY_MODE" == "skip" ]]; then
     SKIP_APP=true
+  fi
+
+  if [[ "$WITH_OBSERVABILITY" == true && "$SKIP_OBSERVABILITY" == true ]]; then
+    log_warn "Observability requested and skipped; observability step will be skipped (--skip-observability)"
   fi
 
   if [[ -z "$USE_EXISTING_CLUSTER" ]]; then
@@ -294,6 +339,53 @@ normalize_settings() {
       ;;
   esac
 
+  if [[ "$ENABLE_HPA" == true && "$DEPLOY_MODE" != "kubernetes" ]]; then
+    log_error "--enable-hpa is only valid with --deploy-mode kubernetes"
+    exit 1
+  fi
+
+  if [[ "$ENABLE_HPA" == true && "$SKIP_APP" == true ]]; then
+    log_warn "HPA requested but app deployment is skipped; disabling HPA for this run"
+    ENABLE_HPA=false
+  fi
+
+  if [[ "$ENABLE_HPA" == true ]]; then
+    if ! is_positive_int "$HPA_MIN_REPLICAS"; then
+      log_error "--hpa-min-replicas must be a positive integer"
+      exit 1
+    fi
+    if ! is_positive_int "$HPA_MAX_REPLICAS"; then
+      log_error "--hpa-max-replicas must be a positive integer"
+      exit 1
+    fi
+    if ! is_positive_int "$HPA_TARGET_CPU" || (( HPA_TARGET_CPU > 100 )); then
+      log_error "--hpa-target-cpu must be an integer between 1 and 100"
+      exit 1
+    fi
+    if (( HPA_MAX_REPLICAS < HPA_MIN_REPLICAS )); then
+      log_error "--hpa-max-replicas must be greater than or equal to --hpa-min-replicas"
+      exit 1
+    fi
+  fi
+
+  if [[ "$DEPLOY_MODE" == "kubernetes" && "$NON_INTERACTIVE" != true ]]; then
+    if [[ "$WITH_OBSERVABILITY" == false ]]; then
+      local observability_answer=""
+      read -r -p "Install Prometheus + Grafana observability stack? [y/N]: " observability_answer
+      if [[ "$observability_answer" =~ ^[Yy]$ ]]; then
+        WITH_OBSERVABILITY=true
+      fi
+    fi
+
+    if [[ "$ENABLE_HPA" == false && "$SKIP_APP" == false ]]; then
+      local hpa_answer=""
+      read -r -p "Enable HPA for johnny-5-alive? [y/N]: " hpa_answer
+      if [[ "$hpa_answer" =~ ^[Yy]$ ]]; then
+        ENABLE_HPA=true
+      fi
+    fi
+  fi
+
   if [[ "$DEPLOY_MODE" == "kubernetes" && "$SKIP_ISSUER" == false ]]; then
     prompt_required LETSENCRYPT_EMAIL "Let's Encrypt email"
   fi
@@ -318,7 +410,15 @@ preflight() {
     require_cmd helm
   fi
 
+  if [[ "$WITH_OBSERVABILITY" == true && "$SKIP_OBSERVABILITY" == false ]]; then
+    require_cmd helm
+  fi
+
   if [[ "$SKIP_INFRA" == false || "$DEPLOY_MODE" == "docker" ]]; then
+    require_cmd make
+  fi
+
+  if [[ "$WITH_OBSERVABILITY" == true && "$SKIP_OBSERVABILITY" == false ]]; then
     require_cmd make
   fi
 
@@ -334,6 +434,29 @@ preflight() {
     log_error "Chart directory not found: $APP_CHART_DIR"
     exit 1
   fi
+}
+
+install_observability() {
+  if [[ "$WITH_OBSERVABILITY" == false ]]; then
+    return
+  fi
+
+  if [[ "$SKIP_OBSERVABILITY" == true ]]; then
+    log_warn "Skipping observability install by request (--skip-observability)"
+    return
+  fi
+
+  log_step "Installing observability stack"
+  pushd "$ROOT_DIR" >/dev/null
+  run_cmd "make install-observability"
+  popd >/dev/null
+
+  log_step "Waiting for observability readiness"
+  run_cmd "kubectl rollout status deployment/kube-prometheus-stack-operator -n monitoring --timeout=5m"
+  run_cmd "kubectl get svc -n monitoring kube-prometheus-stack-grafana"
+  run_cmd "kubectl get svc -n monitoring kube-prometheus-stack-prometheus"
+
+  log_info "Grafana access: kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80"
 }
 
 create_or_use_cluster() {
@@ -444,6 +567,16 @@ EOF
       fi
     } >>"$output_file"
   fi
+
+  if [[ "$ENABLE_HPA" == true ]]; then
+    {
+      echo "autoscaling:"
+      echo "  enabled: true"
+      echo "  minReplicas: $HPA_MIN_REPLICAS"
+      echo "  maxReplicas: $HPA_MAX_REPLICAS"
+      echo "  targetCPUUtilizationPercentage: $HPA_TARGET_CPU"
+    } >>"$output_file"
+  fi
 }
 
 apply_cluster_issuer() {
@@ -477,6 +610,10 @@ deploy_kubernetes_app() {
   run_cmd "kubectl rollout status deployment/johnny-5-alive --timeout=5m"
   run_cmd "kubectl get ingress johnny-5-alive"
 
+  if [[ "$ENABLE_HPA" == true ]]; then
+    run_cmd "kubectl get hpa johnny-5-alive"
+  fi
+
   log_info "Runtime override file: $values_file"
 }
 
@@ -502,8 +639,17 @@ summary() {
   echo "Deploy mode: $DEPLOY_MODE"
   echo "Skip cluster step: $SKIP_CLUSTER"
   echo "Skip infrastructure step: $SKIP_INFRA"
+  echo "With observability: $WITH_OBSERVABILITY"
+  echo "Skip observability step: $SKIP_OBSERVABILITY"
   echo "Skip issuer step: $SKIP_ISSUER"
   echo "Skip app step: $SKIP_APP"
+  echo "HPA enabled: $ENABLE_HPA"
+
+  if [[ "$ENABLE_HPA" == true ]]; then
+    echo "HPA min replicas: $HPA_MIN_REPLICAS"
+    echo "HPA max replicas: $HPA_MAX_REPLICAS"
+    echo "HPA target CPU: $HPA_TARGET_CPU"
+  fi
 
   if [[ "$DEPLOY_MODE" == "kubernetes" ]]; then
     echo "Domain: $DOMAIN"
@@ -514,6 +660,15 @@ summary() {
     echo "  kubectl get ingress johnny-5-alive"
     echo "  kubectl get certificate -A"
     echo "  kubectl get challenges -A"
+    if [[ "$ENABLE_HPA" == true ]]; then
+      echo "  kubectl get hpa johnny-5-alive"
+    fi
+    if [[ "$WITH_OBSERVABILITY" == true && "$SKIP_OBSERVABILITY" == false ]]; then
+      echo "  kubectl get pods -n monitoring"
+      echo "  kubectl get svc -n monitoring kube-prometheus-stack-grafana"
+      echo "  kubectl get svc -n monitoring kube-prometheus-stack-prometheus"
+      echo "  kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80"
+    fi
     echo "  curl -I http://$DOMAIN"
     echo "  curl -I https://$DOMAIN"
   elif [[ "$DEPLOY_MODE" == "docker" ]]; then
@@ -532,6 +687,7 @@ main() {
   preflight
   create_or_use_cluster
   install_infra
+  install_observability
 
   case "$DEPLOY_MODE" in
     kubernetes)

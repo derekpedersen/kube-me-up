@@ -74,7 +74,29 @@ kubectl get ingressclass nginx
 kubectl get apiservice v1beta1.metrics.k8s.io
 ```
 
-## 4. Configure and Apply ClusterIssuer
+## 4. Optional Observability Layer (Prometheus + Grafana)
+
+Install:
+
+```bash
+make install-observability
+```
+
+Validate readiness:
+
+```bash
+kubectl rollout status deployment/kube-prometheus-stack-operator -n monitoring --timeout=5m
+kubectl get svc -n monitoring kube-prometheus-stack-grafana
+kubectl get svc -n monitoring kube-prometheus-stack-prometheus
+```
+
+Access Grafana locally:
+
+```bash
+kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80
+```
+
+## 5. Configure and Apply ClusterIssuer
 
 The default template in this repo includes a static email. For real use, apply your own email.
 
@@ -93,11 +115,11 @@ kubectl apply -f /tmp/cluster_issuer.runtime.yaml
 kubectl get clusterissuer letsencrypt-prod
 ```
 
-## 5. Deploy Johnny 5 Alive
+## 6. Deploy Johnny 5 Alive
 
 Choose one deploy mode.
 
-### 5.1 Kubernetes Helm Deploy
+### 6.1 Kubernetes Helm Deploy
 
 Prepare runtime override values to avoid mutating tracked files:
 
@@ -129,7 +151,25 @@ kubectl rollout status deployment/johnny-5-alive --timeout=5m
 kubectl get ingress johnny-5-alive
 ```
 
-### 5.2 Local Docker Deploy
+Enable HPA in runtime overrides:
+
+```bash
+cat >> /tmp/johnny-5-values.runtime.yaml <<'EOF'
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+EOF
+```
+
+Validate HPA:
+
+```bash
+kubectl get hpa johnny-5-alive
+```
+
+### 6.2 Local Docker Deploy
 
 ```bash
 cd johnny-5-alive
@@ -138,7 +178,7 @@ make run
 
 App will be available at `http://localhost:9090`.
 
-## 6. DNS and TLS Validation
+## 7. DNS and TLS Validation
 
 For Kubernetes HTTPS path:
 
@@ -167,9 +207,9 @@ Expected behavior:
 1. HTTP should eventually redirect to HTTPS when ingress and chart config are fully applied.
 2. HTTPS should return a valid certificate after ACME challenge succeeds.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
-### 7.1 Ingress Pending
+### 8.1 Ingress Pending
 
 Symptom:
 
@@ -183,7 +223,7 @@ kubectl get svc -n ingress-nginx ingress-nginx-controller
 kubectl get ingressclass nginx
 ```
 
-### 7.2 Certificate Not Issued
+### 8.2 Certificate Not Issued
 
 Checks:
 
@@ -200,7 +240,7 @@ Likely causes:
 2. Domain not publicly reachable.
 3. Incorrect ingress host/tls values.
 
-### 7.3 App Not Starting
+### 8.3 App Not Starting
 
 Checks:
 
@@ -212,7 +252,33 @@ kubectl logs -l app.kubernetes.io/name=johnny-5-alive
 
 If image pull fails, provide a reachable image repository in your Helm overrides.
 
-## 8. Cleanup
+### 8.4 HPA Not Scaling
+
+Checks:
+
+```bash
+kubectl get hpa johnny-5-alive -o yaml
+kubectl top pods -l app.kubernetes.io/name=johnny-5-alive
+kubectl describe hpa johnny-5-alive
+```
+
+Likely causes:
+
+1. `metrics-server` is not healthy.
+2. Workload CPU is below target.
+3. HPA is not enabled in chart override values.
+
+### 8.5 Prometheus or Grafana Unavailable
+
+Checks:
+
+```bash
+kubectl get pods -n monitoring
+kubectl get events -n monitoring --sort-by=.metadata.creationTimestamp
+kubectl logs -n monitoring deployment/kube-prometheus-stack-operator
+```
+
+## 9. Cleanup
 
 Remove app:
 
@@ -226,6 +292,7 @@ Remove infrastructure:
 helm uninstall ingress-nginx -n ingress-nginx
 helm uninstall cert-manager -n cert-manager
 helm uninstall metrics-server -n kube-system
+helm uninstall kube-prometheus-stack -n monitoring
 ```
 
 Delete DOKS cluster:
@@ -234,18 +301,20 @@ Delete DOKS cluster:
 doctl kubernetes cluster delete kube-me-up
 ```
 
-## 9. Installer Mapping
+## 10. Installer Mapping
 
 `install.sh` implements this runbook in guided form:
 
 1. Preflight checks.
 2. Cluster path prompts.
 3. Infrastructure install.
-4. Runtime ClusterIssuer generation and apply.
-5. Deploy mode prompt (Kubernetes or Docker).
-6. Post-install verification summary.
+4. Optional observability install.
+5. Runtime ClusterIssuer generation and apply.
+6. Deploy mode prompt (Kubernetes or Docker).
+7. Optional HPA runtime overrides for Kubernetes deploy mode.
+8. Post-install verification summary.
 
-### 9.1 Dry Run and Resume Flags
+### 10.1 Dry Run and Resume Flags
 
 Use dry run to preview every command:
 
@@ -264,4 +333,29 @@ Use explicit skip flags to resume from partial progress:
 
 # Re-run app only
 ./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes --domain your-domain.example.com
+
+# Install optional observability layer only
+./install.sh --use-existing-cluster --with-observability --skip-cluster --skip-infra --skip-issuer --skip-app --deploy-mode skip
+
+# Deploy app with HPA enabled
+./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes --enable-hpa --hpa-min-replicas 2 --hpa-max-replicas 10 --hpa-target-cpu 80 --email your-email@example.com --domain your-domain.example.com
+```
+
+### 10.2 One-Command Demo Target
+
+Use Makefile automation to install infra, observability, issuer, and app with HPA in one command:
+
+```bash
+make install-full-observability EMAIL=your-email@example.com DOMAIN=your-domain.example.com
+```
+
+Optional HPA tuning:
+
+```bash
+make install-full-observability \
+  EMAIL=your-email@example.com \
+  DOMAIN=your-domain.example.com \
+  HPA_MIN_REPLICAS=2 \
+  HPA_MAX_REPLICAS=12 \
+  HPA_TARGET_CPU=75
 ```
