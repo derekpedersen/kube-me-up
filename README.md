@@ -1,79 +1,64 @@
 # Kube Me Up
 
-Kube Me Up is a fast path from "fresh cluster" to "traffic is live".
+Kube Me Up is a deterministic Kubernetes bootstrap workflow for getting from fresh cluster to live HTTPS traffic.
 
-Johnny 5 says: need input.
-This repo says: give it a Kubernetes cluster, and it will wire ingress, TLS, metrics, and a sample app so you can prove the stack works.
+It is intentionally simple and script-driven: no custom controllers, no hidden control plane, just `kubectl`, `helm`, and `make` with an operator-safe flow.
 
-## What This Installs
+## Why This Repo Exists
 
-1. `ingress-nginx` for HTTP/HTTPS routing.
-2. `cert-manager` + Let's Encrypt ClusterIssuer for automated TLS.
-3. `metrics-server` for `kubectl top` and autoscaling inputs.
-4. `johnny-5-alive` sample app deployed through Helm.
+This repository is a reference implementation for senior and founding engineers who want infrastructure automation that is:
 
-## Quick Start
+1. Safe to rerun (`helm upgrade --install`, preflight checks, readiness gates).
+2. Easy to resume (`--skip-cluster`, `--skip-infra`, `--skip-issuer`, `--skip-app`).
+3. Easy to inspect (`--dry-run` prints commands before any cluster mutation).
+4. Scoped and honest (DOKS automation is built-in; other clouds are supported via existing-cluster path).
 
-Recommended path is the guided installer:
+The workflow is designed to keep decisions explicit: trade-offs, operational boundaries, and execution steps are all visible in the commands and flags.
 
-```bash
-chmod +x install.sh
-./install.sh
-```
+## What This Includes
 
-The script will prompt for cluster mode, domain, TLS email, and deployment mode.
-
-Install directly from GitHub raw:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash
-```
-
-Install from GitHub raw and pass flags:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash -s -- --use-existing-cluster --deploy-mode kubernetes
-```
-
-Preview all actions without executing anything:
-
-```bash
-./install.sh --dry-run --use-existing-cluster
-```
-
-Resume from a partially completed environment with explicit step skips:
-
-```bash
-./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes
-```
-
-For full manual steps, use [RUNBOOK.md](RUNBOOK.md).
+1. Idempotent infrastructure install with Helm.
+2. Separation of concerns between cluster provisioning, infrastructure, issuer, and app deployment.
+3. Runtime overrides instead of mutating tracked manifests.
+4. Readiness validation before claiming success.
+5. Optional observability stack (Prometheus + Grafana).
+6. Optional HPA configuration for the sample app.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    U[Internet Users] --> DNS[DNS A/AAAA Record]
-    DNS --> LB[Cloud LoadBalancer]
-    LB --> NGINX[ingress-nginx controller]
-    NGINX --> APP[johnny-5-alive service]
-    APP --> POD[johnny-5-alive pod]
+        U[Internet Users] --> DNS[DNS A/AAAA Record]
+        DNS --> LB[Cloud Load Balancer]
+        LB --> NGINX[ingress-nginx controller]
+        NGINX --> APP[johnny-5-alive service]
+        APP --> POD[johnny-5-alive pod]
 
-    CM[cert-manager] --> ISSUER[ClusterIssuer letsencrypt-prod]
-    ISSUER --> NGINX
+        CM[cert-manager] --> ISSUER[ClusterIssuer letsencrypt-prod]
+        ISSUER --> NGINX
 
-    METRICS[metrics-server] --> K8S[Kubernetes API]
-    K8S --> OPS[kubectl top / HPA signals]
+        METRICS[metrics-server] --> K8S[Kubernetes API]
+        K8S --> OPS[kubectl top and HPA inputs]
 ```
+
+## Design Choices and Trade-Offs
+
+1. `ingress-nginx`: broad compatibility and straightforward operations for HTTP routing.
+2. `cert-manager` with ACME HTTP-01: simple TLS automation, but requires public DNS to resolve correctly to ingress.
+3. `metrics-server`: enables `kubectl top` and autoscaling signals with minimal setup.
+4. `kube-prometheus-stack` (optional): adds historical metrics and dashboards, but increases cluster footprint.
+5. Guided `install.sh` plus explicit flags: low-friction onboarding without hiding what runs.
+
+Non-goal: this is not a full platform framework. It is a focused bootstrap workflow and operational baseline.
 
 ## Prerequisites
 
 - `kubectl`
 - `helm`
-- `docker`
+- `docker` (only for local Docker deploy mode)
 - `make`
 - `git`
-- `doctl` only if you want installer-managed DOKS cluster creation
+- `doctl` (only for installer-managed DOKS cluster creation)
 
 Cloud docs for manual cluster setup:
 
@@ -81,7 +66,114 @@ Cloud docs for manual cluster setup:
 - EKS: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html
 - DOKS: https://docs.digitalocean.com/products/kubernetes/how-to/create-clusters/
 
-## Manual Install (Fast Path)
+## Install Paths
+
+### Path A: Existing Cluster (Recommended)
+
+Run guided install:
+
+```bash
+chmod +x install.sh
+./install.sh --use-existing-cluster
+```
+
+Non-interactive example:
+
+```bash
+./install.sh \
+    --use-existing-cluster \
+    --deploy-mode kubernetes \
+    --with-observability \
+    --enable-hpa \
+    --domain alive.example.com \
+    --email you@example.com
+```
+
+Preview without execution:
+
+```bash
+./install.sh --dry-run --use-existing-cluster
+```
+
+Resume after partial completion:
+
+```bash
+./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes
+```
+
+Enable optional observability only:
+
+```bash
+./install.sh --use-existing-cluster --with-observability --skip-app --deploy-mode skip
+```
+
+### Path B: DOKS Cluster Creation
+
+The installer can create or reuse a DOKS cluster when `--use-existing-cluster` is not set.
+
+```bash
+./install.sh --cloud doks --cluster-name kube-me-up --region nyc3
+```
+
+For non-DOKS cluster creation, create cluster manually and rerun with `--use-existing-cluster`.
+
+### Raw GitHub Script
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash
+```
+
+With flags:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash -s -- --use-existing-cluster --deploy-mode kubernetes
+```
+
+## Operational Model
+
+### Idempotency
+
+Infrastructure and app deployment use `helm upgrade --install`, so reruns converge desired state instead of requiring teardown.
+
+### Runtime Config Isolation
+
+The installer generates temporary runtime files for ClusterIssuer and Helm overrides. Tracked files remain clean while deployment-specific values are injected at runtime.
+
+### Readiness Gates
+
+The installer waits on rollout status for ingress-nginx, cert-manager, metrics-server, and app deployment before printing success paths.
+
+### Optional Observability
+
+When enabled, the installer deploys Prometheus and Grafana with `kube-prometheus-stack` into the `monitoring` namespace.
+
+### Optional HPA
+
+When enabled in Kubernetes deploy mode, runtime Helm overrides set:
+
+- `autoscaling.enabled=true`
+- `autoscaling.minReplicas`
+- `autoscaling.maxReplicas`
+- `autoscaling.targetCPUUtilizationPercentage`
+
+Flags:
+
+- `--enable-hpa`
+- `--hpa-min-replicas`
+- `--hpa-max-replicas`
+- `--hpa-target-cpu`
+
+### Resume Controls
+
+Use explicit skip flags to rerun only what you need:
+
+- `--skip-cluster`
+- `--skip-infra`
+- `--skip-observability`
+- `--skip-issuer`
+- `--skip-app`
+
+## Manual Fast Path
 
 From repo root:
 
@@ -91,7 +183,7 @@ kubectl apply -f cluster_issuer.yaml
 helm upgrade --install johnny-5-alive johnny-5-alive/.helm
 ```
 
-Then verify:
+Validate:
 
 ```bash
 kubectl get ingressclass nginx
@@ -102,65 +194,114 @@ kubectl get pods -l app.kubernetes.io/name=johnny-5-alive
 
 ## Deploy Modes
 
-### Kubernetes Deploy
+### Kubernetes
 
-Deploy `johnny-5-alive` via Helm into your current kube context.
+Deploy sample app through Helm into current kube context:
 
 ```bash
 helm upgrade --install johnny-5-alive johnny-5-alive/.helm
 ```
 
-### Local Docker Run
+Enable HPA through installer flags:
 
-Run the sample app without Kubernetes:
+```bash
+./install.sh \
+    --use-existing-cluster \
+    --deploy-mode kubernetes \
+    --enable-hpa \
+    --hpa-min-replicas 2 \
+    --hpa-max-replicas 10 \
+    --hpa-target-cpu 80 \
+    --domain alive.example.com \
+    --email you@example.com
+```
+
+### Docker
+
+Run sample app locally without Kubernetes:
 
 ```bash
 cd johnny-5-alive
 make run
 ```
 
-App is reachable at `http://localhost:9090`.
+Endpoint: `http://localhost:9090`
 
-## Configuration Points
+### Skip
 
-- TLS issuer template: `cluster_issuer.yaml`
-- App chart defaults: `johnny-5-alive/.helm/values.yaml`
-- Infra install targets: `Makefile`
+Install infrastructure and skip app deployment:
 
-The installer generates runtime override manifests so your tracked files stay clean by default.
+```bash
+./install.sh --deploy-mode skip --use-existing-cluster
+```
+
+### Observability (Optional)
+
+Install Prometheus + Grafana without changing app deployment:
+
+```bash
+./install.sh --use-existing-cluster --with-observability --deploy-mode skip --skip-app
+```
+
+Access Grafana locally:
+
+```bash
+kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80
+```
 
 ## Verification Checklist
 
 ```bash
 kubectl get nodes
-kubectl get svc -n ingress-nginx
+kubectl get svc -n ingress-nginx ingress-nginx-controller
 kubectl get clusterissuer letsencrypt-prod
-kubectl get ingress
+kubectl get ingress johnny-5-alive
+kubectl get certificate -A
+kubectl get challenges -A
 kubectl top node
+kubectl get hpa johnny-5-alive
+kubectl get pods -n monitoring
+kubectl get svc -n monitoring kube-prometheus-stack-grafana
+kubectl get svc -n monitoring kube-prometheus-stack-prometheus
 ```
 
-If you configured DNS + domain correctly, HTTPS should come online after the ACME challenge completes.
+If DNS and domain are configured correctly, HTTPS should become healthy after ACME challenge completion.
 
 ## Troubleshooting
 
-- Ingress has no address: verify `ingress-nginx-controller` service is `LoadBalancer` and allocated.
-- Cert not issuing: verify DNS points to load balancer and check `kubectl get challenges -A`.
-- App not reachable: verify ingress host in chart values or installer overrides.
+- Ingress has no address: check `ingress-nginx-controller` service type and allocation.
+- Cert not issuing: confirm DNS points to ingress load balancer, then inspect `kubectl get challenges -A`.
+- App unreachable: verify ingress host and TLS values used by runtime overrides.
 
-Detailed troubleshooting and recovery commands live in [RUNBOOK.md](RUNBOOK.md).
+Use the full runbook for recovery and deep diagnostics: [RUNBOOK.md](RUNBOOK.md).
 
-## One-Liner
+## One-Liners
 
-When the cluster is ready and you want action:
+Cluster ready, deploy now:
 
 ```bash
 ./install.sh --use-existing-cluster --deploy-mode kubernetes
 ```
 
-When you need to rerun only the app deploy:
+Full demo stack (infra + Prometheus/Grafana + issuer + app with HPA):
+
+```bash
+make install-full-observability EMAIL=you@example.com DOMAIN=alive.example.com
+```
+
+Optional HPA tuning for that target:
+
+```bash
+make install-full-observability \
+    EMAIL=you@example.com \
+    DOMAIN=alive.example.com \
+    HPA_MIN_REPLICAS=2 \
+    HPA_MAX_REPLICAS=12 \
+    HPA_TARGET_CPU=75
+```
+
+Rerun app-only deploy:
 
 ```bash
 ./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes
 ```
-
-No disassemble. Only deploy.
