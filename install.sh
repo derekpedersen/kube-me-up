@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
 APP_CHART_DIR="$ROOT_DIR/johnny-5-alive/.helm"
+DEBUG_POD_MANIFEST="$ROOT_DIR/johnny-5-debug/pod.yaml"
 
 CLOUD="doks"
 USE_EXISTING_CLUSTER=""
@@ -18,9 +19,15 @@ IMAGE_TAG=""
 WITH_OBSERVABILITY=false
 SKIP_OBSERVABILITY=false
 ENABLE_HPA=false
-HPA_MIN_REPLICAS=2
-HPA_MAX_REPLICAS=10
+HPA_MIN_REPLICAS=1
+HPA_MAX_REPLICAS=3
 HPA_TARGET_CPU=80
+HPA_TARGET_MEM=80
+WITH_DEBUG_POD=false
+SKIP_DEBUG_POD=false
+DEBUG_POD_IMAGE="johnny-5-debug:latest"
+DEBUG_POD_NAMESPACE="default"
+DEBUG_POD_NAME="johnny-5-debug"
 DRY_RUN=false
 SKIP_CLUSTER=false
 SKIP_INFRA=false
@@ -65,6 +72,11 @@ Options:
   --skip-infra                 Resume mode: skip infrastructure install step
   --with-observability         Install Prometheus + Grafana (kube-prometheus-stack)
   --skip-observability         Resume mode: skip observability install step
+  --with-debug-pod             Deploy standalone johnny-5-debug pod for exec/testing
+  --skip-debug-pod             Resume mode: skip debug pod deployment step
+  --debug-pod-image IMAGE      Debug pod image (default: johnny-5-debug:latest)
+  --debug-pod-namespace NS     Debug pod namespace (default: default)
+  --debug-pod-name NAME        Debug pod name (default: johnny-5-debug)
   --skip-issuer                Resume mode: skip ClusterIssuer apply step
   --skip-app                   Resume mode: skip application deployment step
   --cluster-name NAME          Cluster name (default: kube-me-up)
@@ -75,9 +87,10 @@ Options:
   --image-repository REPO      Optional Helm override for image.repository
   --image-tag TAG              Optional Helm override for image.tag
   --enable-hpa                 Enable HorizontalPodAutoscaler for johnny-5-alive (Kubernetes mode)
-  --hpa-min-replicas N         HPA minimum replicas (default: 2)
-  --hpa-max-replicas N         HPA maximum replicas (default: 10)
+  --hpa-min-replicas N         HPA minimum replicas (default: 1)
+  --hpa-max-replicas N         HPA maximum replicas (default: 3)
   --hpa-target-cpu N           HPA target CPU utilization percent (default: 80)
+  --hpa-target-mem N           HPA target memory utilization percent (default: 80)
   --dry-run                    Print commands without executing
   --non-interactive            Require all needed flags, no prompts
   --yes                        Auto-confirm prompts
@@ -86,6 +99,7 @@ Options:
 Examples:
   ./install.sh
   ./install.sh --dry-run --use-existing-cluster
+  ./install.sh --use-existing-cluster --deploy-mode skip --skip-infra --skip-issuer --skip-app --with-debug-pod
   ./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes --skip-issuer
   ./install.sh --use-existing-cluster --domain alive.example.com --email you@example.com
   ./install.sh --use-existing-cluster --deploy-mode kubernetes --with-observability --enable-hpa --domain alive.example.com --email you@example.com
@@ -196,6 +210,26 @@ parse_args() {
         SKIP_OBSERVABILITY=true
         shift
         ;;
+      --with-debug-pod)
+        WITH_DEBUG_POD=true
+        shift
+        ;;
+      --skip-debug-pod)
+        SKIP_DEBUG_POD=true
+        shift
+        ;;
+      --debug-pod-image)
+        DEBUG_POD_IMAGE="${2:-}"
+        shift 2
+        ;;
+      --debug-pod-namespace)
+        DEBUG_POD_NAMESPACE="${2:-}"
+        shift 2
+        ;;
+      --debug-pod-name)
+        DEBUG_POD_NAME="${2:-}"
+        shift 2
+        ;;
       --skip-issuer)
         SKIP_ISSUER=true
         shift
@@ -244,6 +278,10 @@ parse_args() {
         HPA_TARGET_CPU="${2:-}"
         shift 2
         ;;
+      --hpa-target-mem)
+        HPA_TARGET_MEM="${2:-}"
+        shift 2
+        ;;
       --dry-run)
         DRY_RUN=true
         shift
@@ -282,6 +320,25 @@ normalize_settings() {
 
   if [[ "$WITH_OBSERVABILITY" == true && "$SKIP_OBSERVABILITY" == true ]]; then
     log_warn "Observability requested and skipped; observability step will be skipped (--skip-observability)"
+  fi
+
+  if [[ "$WITH_DEBUG_POD" == true && "$SKIP_DEBUG_POD" == true ]]; then
+    log_warn "Debug pod requested and skipped; debug pod step will be skipped (--skip-debug-pod)"
+  fi
+
+  if [[ -z "$DEBUG_POD_IMAGE" ]]; then
+    log_error "--debug-pod-image cannot be empty"
+    exit 1
+  fi
+
+  if [[ -z "$DEBUG_POD_NAMESPACE" ]]; then
+    log_error "--debug-pod-namespace cannot be empty"
+    exit 1
+  fi
+
+  if [[ -z "$DEBUG_POD_NAME" ]]; then
+    log_error "--debug-pod-name cannot be empty"
+    exit 1
   fi
 
   if [[ -z "$USE_EXISTING_CLUSTER" ]]; then
@@ -362,6 +419,10 @@ normalize_settings() {
       log_error "--hpa-target-cpu must be an integer between 1 and 100"
       exit 1
     fi
+    if ! is_positive_int "$HPA_TARGET_MEM" || (( HPA_TARGET_MEM > 100 )); then
+      log_error "--hpa-target-mem must be an integer between 1 and 100"
+      exit 1
+    fi
     if (( HPA_MAX_REPLICAS < HPA_MIN_REPLICAS )); then
       log_error "--hpa-max-replicas must be greater than or equal to --hpa-min-replicas"
       exit 1
@@ -422,6 +483,10 @@ preflight() {
     require_cmd make
   fi
 
+  if [[ "$WITH_DEBUG_POD" == true && "$SKIP_DEBUG_POD" == false ]]; then
+    require_cmd kubectl
+  fi
+
   if [[ "$DEPLOY_MODE" == "docker" && "$SKIP_APP" == false ]]; then
     require_cmd docker
   fi
@@ -434,6 +499,53 @@ preflight() {
     log_error "Chart directory not found: $APP_CHART_DIR"
     exit 1
   fi
+
+  if [[ "$WITH_DEBUG_POD" == true && "$SKIP_DEBUG_POD" == false && ! -f "$DEBUG_POD_MANIFEST" ]]; then
+    log_error "Debug pod manifest not found: $DEBUG_POD_MANIFEST"
+    exit 1
+  fi
+}
+
+deploy_debug_pod() {
+  if [[ "$WITH_DEBUG_POD" == false ]]; then
+    return
+  fi
+
+  if [[ "$SKIP_DEBUG_POD" == true ]]; then
+    log_warn "Skipping debug pod deployment by request (--skip-debug-pod)"
+    return
+  fi
+
+  log_step "Deploying standalone johnny-5-debug pod"
+
+  run_cmd "kubectl get namespace $DEBUG_POD_NAMESPACE >/dev/null 2>&1 || kubectl create namespace $DEBUG_POD_NAMESPACE"
+
+  local debug_manifest
+  debug_manifest="$(mktemp -t kube-me-up-debug-pod.XXXXXX.yaml)"
+
+  cat >"$debug_manifest" <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $DEBUG_POD_NAME
+  labels:
+    app.kubernetes.io/name: johnny-5-debug
+spec:
+  containers:
+    - name: debug
+      image: $DEBUG_POD_IMAGE
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep infinity"]
+      stdin: true
+      tty: true
+EOF
+
+  run_cmd "kubectl apply -n $DEBUG_POD_NAMESPACE -f $debug_manifest"
+  run_cmd "kubectl wait --for=condition=Ready pod/$DEBUG_POD_NAME -n $DEBUG_POD_NAMESPACE --timeout=180s"
+  run_cmd "kubectl get pod $DEBUG_POD_NAME -n $DEBUG_POD_NAMESPACE"
+
+  log_info "Debug pod manifest: $debug_manifest"
+  log_info "Exec into pod: kubectl exec -it -n $DEBUG_POD_NAMESPACE $DEBUG_POD_NAME -- sh"
 }
 
 install_observability() {
@@ -575,6 +687,7 @@ EOF
       echo "  minReplicas: $HPA_MIN_REPLICAS"
       echo "  maxReplicas: $HPA_MAX_REPLICAS"
       echo "  targetCPUUtilizationPercentage: $HPA_TARGET_CPU"
+      echo "  targetMemoryUtilizationPercentage: $HPA_TARGET_MEM"
     } >>"$output_file"
   fi
 }
@@ -641,14 +754,23 @@ summary() {
   echo "Skip infrastructure step: $SKIP_INFRA"
   echo "With observability: $WITH_OBSERVABILITY"
   echo "Skip observability step: $SKIP_OBSERVABILITY"
+  echo "With debug pod: $WITH_DEBUG_POD"
+  echo "Skip debug pod step: $SKIP_DEBUG_POD"
   echo "Skip issuer step: $SKIP_ISSUER"
   echo "Skip app step: $SKIP_APP"
   echo "HPA enabled: $ENABLE_HPA"
+
+  if [[ "$WITH_DEBUG_POD" == true ]]; then
+    echo "Debug pod image: $DEBUG_POD_IMAGE"
+    echo "Debug pod namespace: $DEBUG_POD_NAMESPACE"
+    echo "Debug pod name: $DEBUG_POD_NAME"
+  fi
 
   if [[ "$ENABLE_HPA" == true ]]; then
     echo "HPA min replicas: $HPA_MIN_REPLICAS"
     echo "HPA max replicas: $HPA_MAX_REPLICAS"
     echo "HPA target CPU: $HPA_TARGET_CPU"
+    echo "HPA target memory: $HPA_TARGET_MEM"
   fi
 
   if [[ "$DEPLOY_MODE" == "kubernetes" ]]; then
@@ -669,12 +791,26 @@ summary() {
       echo "  kubectl get svc -n monitoring kube-prometheus-stack-prometheus"
       echo "  kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80"
     fi
+    if [[ "$WITH_DEBUG_POD" == true && "$SKIP_DEBUG_POD" == false ]]; then
+      echo "  kubectl get pod $DEBUG_POD_NAME -n $DEBUG_POD_NAMESPACE"
+      echo "  kubectl exec -it -n $DEBUG_POD_NAMESPACE $DEBUG_POD_NAME -- sh"
+    fi
     echo "  curl -I http://$DOMAIN"
     echo "  curl -I https://$DOMAIN"
   elif [[ "$DEPLOY_MODE" == "docker" ]]; then
     echo "Check local endpoint: http://localhost:9090"
+    if [[ "$WITH_DEBUG_POD" == true && "$SKIP_DEBUG_POD" == false ]]; then
+      echo "Debug pod is also deployed on Kubernetes:"
+      echo "  kubectl get pod $DEBUG_POD_NAME -n $DEBUG_POD_NAMESPACE"
+      echo "  kubectl exec -it -n $DEBUG_POD_NAMESPACE $DEBUG_POD_NAME -- sh"
+    fi
   else
     echo "App deployment skipped. Infrastructure is installed and ready."
+    if [[ "$WITH_DEBUG_POD" == true && "$SKIP_DEBUG_POD" == false ]]; then
+      echo "Debug pod deployed for pod-only testing:"
+      echo "  kubectl get pod $DEBUG_POD_NAME -n $DEBUG_POD_NAMESPACE"
+      echo "  kubectl exec -it -n $DEBUG_POD_NAMESPACE $DEBUG_POD_NAME -- sh"
+    fi
   fi
 
   echo
@@ -686,6 +822,7 @@ main() {
   normalize_settings
   preflight
   create_or_use_cluster
+  deploy_debug_pod
   install_infra
   install_observability
 

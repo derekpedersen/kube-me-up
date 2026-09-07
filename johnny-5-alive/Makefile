@@ -1,4 +1,5 @@
 export GIT_COMMIT_SHA = $(shell git rev-parse HEAD)
+ALIVE_REPO ?= derekpedersen/johnny-5-alive
 
 build:
 	docker build ./ -t johnny-5-alive:latest --no-cache
@@ -10,9 +11,8 @@ docker:
 	docker build ./ -t johnny-5-alive:latest --no-cache
 
 publish: docker
-	docker tag johnny-5-alive us.gcr.io/sleipnir/johnny-5-alive:${GIT_COMMIT_SHA}
-	gcloud auth configure-docker
-	docker -- push us.gcr.io/sleipnir/johnny-5-alive:${GIT_COMMIT_SHA}
+	docker tag johnny-5-alive $(ALIVE_REPO):$(GIT_COMMIT_SHA)
+	docker push $(ALIVE_REPO):$(GIT_COMMIT_SHA)
 
 set-version:
 	.helm/set-version.sh

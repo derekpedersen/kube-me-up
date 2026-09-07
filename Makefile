@@ -1,8 +1,14 @@
-.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability ingress certs metrics-api helm-charts
+.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability debug-build debug-publish debug-build-publish debug-deploy-pod debug-exec debug-delete-pod ingress certs metrics-api helm-charts
 
-HPA_MIN_REPLICAS ?= 2
-HPA_MAX_REPLICAS ?= 10
+HPA_MIN_REPLICAS ?= 1
+HPA_MAX_REPLICAS ?= 3
 HPA_TARGET_CPU ?= 80
+HPA_TARGET_MEM ?= 80
+DEBUG_IMAGE ?= johnny-5-debug:latest
+DEBUG_NAMESPACE ?= default
+DEBUG_POD_NAME ?= johnny-5-debug
+DEBUG_REPO ?= derekpedersen/johnny-5-debug
+DEBUG_TAG ?= $(shell git rev-parse --short HEAD)
 
 helm-repos:
 	helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx/
@@ -63,7 +69,8 @@ deploy-app-hpa:
 		--set autoscaling.enabled=true \
 		--set autoscaling.minReplicas=$(HPA_MIN_REPLICAS) \
 		--set autoscaling.maxReplicas=$(HPA_MAX_REPLICAS) \
-		--set autoscaling.targetCPUUtilizationPercentage=$(HPA_TARGET_CPU)
+		--set autoscaling.targetCPUUtilizationPercentage=$(HPA_TARGET_CPU) \
+		--set autoscaling.targetMemoryUtilizationPercentage=$(HPA_TARGET_MEM)
 	kubectl rollout status deployment/johnny-5-alive --timeout=5m
 	kubectl get ingress johnny-5-alive
 	kubectl get hpa johnny-5-alive
@@ -71,6 +78,24 @@ deploy-app-hpa:
 install-full-observability: helm-charts install-observability install-issuer deploy-app-hpa observability-verify
 	@echo "Full stack complete: infra + observability + issuer + app(HPA)"
 	@echo "Grafana: kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80"
+
+debug-build:
+	$(MAKE) -C johnny-5-debug build IMAGE=$(DEBUG_IMAGE)
+
+debug-publish:
+	$(MAKE) -C johnny-5-debug publish IMAGE=$(DEBUG_IMAGE) DEBUG_REPO=$(DEBUG_REPO) DEBUG_TAG=$(DEBUG_TAG)
+
+debug-build-publish: debug-build debug-publish
+	@echo "Debug image published: $(DEBUG_REPO):$(DEBUG_TAG)"
+
+debug-deploy-pod:
+	$(MAKE) -C johnny-5-debug deploy-pod-image IMAGE=$(DEBUG_IMAGE) NAMESPACE=$(DEBUG_NAMESPACE) POD_NAME=$(DEBUG_POD_NAME)
+
+debug-exec:
+	kubectl exec -it -n $(DEBUG_NAMESPACE) $(DEBUG_POD_NAME) -- sh
+
+debug-delete-pod:
+	$(MAKE) -C johnny-5-debug delete-pod NAMESPACE=$(DEBUG_NAMESPACE) POD_NAME=$(DEBUG_POD_NAME)
 
 ingress: install-ingress-nginx
 

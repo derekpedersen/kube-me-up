@@ -23,6 +23,7 @@ The workflow is designed to keep decisions explicit: trade-offs, operational bou
 4. Readiness validation before claiming success.
 5. Optional observability stack (Prometheus + Grafana).
 6. Optional HPA configuration for the sample app.
+7. Optional standalone debug pod workflow in `johnny-5-debug`.
 
 ## Architecture
 
@@ -48,6 +49,34 @@ flowchart TD
 3. `metrics-server`: enables `kubectl top` and autoscaling signals with minimal setup.
 4. `kube-prometheus-stack` (optional): adds historical metrics and dashboards, but increases cluster footprint.
 5. Guided `install.sh` plus explicit flags: low-friction onboarding without hiding what runs.
+
+## Standalone Debug Workload
+
+`johnny-5-debug` is separate from `johnny-5-alive` and is designed for exec-heavy Kubernetes testing.
+
+Included tooling in the debug image:
+
+- `kubectl`, `helm`, `yq`
+- `curl`, `wget`, `nc`, `dig`, `ping`, `iproute2`, `tcpdump`
+- `jq`, `openssl`, and shell utilities
+
+Build and deploy debug pod with root Makefile:
+
+```bash
+make debug-build
+make debug-build-publish
+make debug-deploy-pod
+make debug-exec
+```
+
+Custom image/namespace/pod name:
+
+```bash
+make debug-deploy-pod \
+    DEBUG_IMAGE=your-registry/johnny-5-debug:tag \
+    DEBUG_NAMESPACE=default \
+    DEBUG_POD_NAME=johnny-5-debug
+```
 
 Non-goal: this is not a full platform framework. It is a focused bootstrap workflow and operational baseline.
 
@@ -155,6 +184,7 @@ When enabled in Kubernetes deploy mode, runtime Helm overrides set:
 - `autoscaling.minReplicas`
 - `autoscaling.maxReplicas`
 - `autoscaling.targetCPUUtilizationPercentage`
+- `autoscaling.targetMemoryUtilizationPercentage`
 
 Flags:
 
@@ -162,6 +192,7 @@ Flags:
 - `--hpa-min-replicas`
 - `--hpa-max-replicas`
 - `--hpa-target-cpu`
+- `--hpa-target-mem`
 
 ### Resume Controls
 
@@ -209,9 +240,10 @@ Enable HPA through installer flags:
     --use-existing-cluster \
     --deploy-mode kubernetes \
     --enable-hpa \
-    --hpa-min-replicas 2 \
-    --hpa-max-replicas 10 \
+    --hpa-min-replicas 1 \
+    --hpa-max-replicas 3 \
     --hpa-target-cpu 80 \
+    --hpa-target-mem 80 \
     --domain alive.example.com \
     --email you@example.com
 ```
@@ -233,6 +265,35 @@ Install infrastructure and skip app deployment:
 
 ```bash
 ./install.sh --deploy-mode skip --use-existing-cluster
+```
+
+### Pod-Only Debug Deploy
+
+Deploy only the standalone debug pod (no app, no ingress):
+
+```bash
+./install.sh \
+    --use-existing-cluster \
+    --deploy-mode skip \
+    --skip-infra \
+    --skip-issuer \
+    --skip-app \
+    --with-debug-pod
+```
+
+Override pod image and namespace:
+
+```bash
+./install.sh \
+    --use-existing-cluster \
+    --deploy-mode skip \
+    --skip-infra \
+    --skip-issuer \
+    --skip-app \
+    --with-debug-pod \
+    --debug-pod-image your-registry/johnny-5-debug:tag \
+    --debug-pod-namespace default \
+    --debug-pod-name johnny-5-debug
 ```
 
 ### Observability (Optional)
@@ -263,6 +324,7 @@ kubectl get hpa johnny-5-alive
 kubectl get pods -n monitoring
 kubectl get svc -n monitoring kube-prometheus-stack-grafana
 kubectl get svc -n monitoring kube-prometheus-stack-prometheus
+kubectl get pod johnny-5-debug -n default
 ```
 
 If DNS and domain are configured correctly, HTTPS should become healthy after ACME challenge completion.
@@ -295,9 +357,10 @@ Optional HPA tuning for that target:
 make install-full-observability \
     EMAIL=you@example.com \
     DOMAIN=alive.example.com \
-    HPA_MIN_REPLICAS=2 \
-    HPA_MAX_REPLICAS=12 \
-    HPA_TARGET_CPU=75
+    HPA_MIN_REPLICAS=1 \
+    HPA_MAX_REPLICAS=3 \
+    HPA_TARGET_CPU=75 \
+    HPA_TARGET_MEM=80
 ```
 
 Rerun app-only deploy:

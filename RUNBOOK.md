@@ -96,7 +96,37 @@ Access Grafana locally:
 kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80
 ```
 
-## 5. Configure and Apply ClusterIssuer
+## 5. Optional Standalone Debug Pod
+
+Use `johnny-5-debug` for exec-based connectivity and Kubernetes testing without deploying the app stack.
+
+Build image locally:
+
+```bash
+make debug-build
+make debug-build-publish
+```
+
+Deploy pod only:
+
+```bash
+make debug-deploy-pod
+kubectl exec -it -n default johnny-5-debug -- sh
+```
+
+Deploy with custom image and namespace:
+
+```bash
+make debug-deploy-pod DEBUG_IMAGE=your-registry/johnny-5-debug:tag DEBUG_NAMESPACE=default DEBUG_POD_NAME=johnny-5-debug
+```
+
+Delete debug pod:
+
+```bash
+make debug-delete-pod
+```
+
+## 6. Configure and Apply ClusterIssuer
 
 The default template in this repo includes a static email. For real use, apply your own email.
 
@@ -115,11 +145,11 @@ kubectl apply -f /tmp/cluster_issuer.runtime.yaml
 kubectl get clusterissuer letsencrypt-prod
 ```
 
-## 6. Deploy Johnny 5 Alive
+## 7. Deploy Johnny 5 Alive
 
 Choose one deploy mode.
 
-### 6.1 Kubernetes Helm Deploy
+### 7.1 Kubernetes Helm Deploy
 
 Prepare runtime override values to avoid mutating tracked files:
 
@@ -157,9 +187,10 @@ Enable HPA in runtime overrides:
 cat >> /tmp/johnny-5-values.runtime.yaml <<'EOF'
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 3
   targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
 EOF
 ```
 
@@ -169,7 +200,7 @@ Validate HPA:
 kubectl get hpa johnny-5-alive
 ```
 
-### 6.2 Local Docker Deploy
+### 7.2 Local Docker Deploy
 
 ```bash
 cd johnny-5-alive
@@ -178,7 +209,7 @@ make run
 
 App will be available at `http://localhost:9090`.
 
-## 7. DNS and TLS Validation
+## 8. DNS and TLS Validation
 
 For Kubernetes HTTPS path:
 
@@ -207,9 +238,9 @@ Expected behavior:
 1. HTTP should eventually redirect to HTTPS when ingress and chart config are fully applied.
 2. HTTPS should return a valid certificate after ACME challenge succeeds.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
-### 8.1 Ingress Pending
+### 9.1 Ingress Pending
 
 Symptom:
 
@@ -223,7 +254,7 @@ kubectl get svc -n ingress-nginx ingress-nginx-controller
 kubectl get ingressclass nginx
 ```
 
-### 8.2 Certificate Not Issued
+### 9.2 Certificate Not Issued
 
 Checks:
 
@@ -240,7 +271,7 @@ Likely causes:
 2. Domain not publicly reachable.
 3. Incorrect ingress host/tls values.
 
-### 8.3 App Not Starting
+### 9.3 App Not Starting
 
 Checks:
 
@@ -252,7 +283,7 @@ kubectl logs -l app.kubernetes.io/name=johnny-5-alive
 
 If image pull fails, provide a reachable image repository in your Helm overrides.
 
-### 8.4 HPA Not Scaling
+### 9.4 HPA Not Scaling
 
 Checks:
 
@@ -268,7 +299,7 @@ Likely causes:
 2. Workload CPU is below target.
 3. HPA is not enabled in chart override values.
 
-### 8.5 Prometheus or Grafana Unavailable
+### 9.5 Prometheus or Grafana Unavailable
 
 Checks:
 
@@ -278,7 +309,23 @@ kubectl get events -n monitoring --sort-by=.metadata.creationTimestamp
 kubectl logs -n monitoring deployment/kube-prometheus-stack-operator
 ```
 
-## 9. Cleanup
+### 9.6 Debug Pod Not Ready
+
+Checks:
+
+```bash
+kubectl get pod -n default johnny-5-debug
+kubectl describe pod -n default johnny-5-debug
+kubectl logs -n default johnny-5-debug
+```
+
+Likely causes:
+
+1. Image is not pullable from cluster nodes.
+2. Namespace mismatch between deploy and exec commands.
+3. Cluster policy blocks networking tools.
+
+## 10. Cleanup
 
 Remove app:
 
@@ -293,6 +340,7 @@ helm uninstall ingress-nginx -n ingress-nginx
 helm uninstall cert-manager -n cert-manager
 helm uninstall metrics-server -n kube-system
 helm uninstall kube-prometheus-stack -n monitoring
+kubectl delete pod johnny-5-debug -n default --ignore-not-found
 ```
 
 Delete DOKS cluster:
@@ -301,20 +349,21 @@ Delete DOKS cluster:
 doctl kubernetes cluster delete kube-me-up
 ```
 
-## 10. Installer Mapping
+## 11. Installer Mapping
 
 `install.sh` implements this runbook in guided form:
 
 1. Preflight checks.
 2. Cluster path prompts.
-3. Infrastructure install.
-4. Optional observability install.
-5. Runtime ClusterIssuer generation and apply.
-6. Deploy mode prompt (Kubernetes or Docker).
-7. Optional HPA runtime overrides for Kubernetes deploy mode.
-8. Post-install verification summary.
+3. Optional debug pod deployment.
+4. Infrastructure install.
+5. Optional observability install.
+6. Runtime ClusterIssuer generation and apply.
+7. Deploy mode prompt (Kubernetes or Docker).
+8. Optional HPA runtime overrides for Kubernetes deploy mode.
+9. Post-install verification summary.
 
-### 10.1 Dry Run and Resume Flags
+### 11.1 Dry Run and Resume Flags
 
 Use dry run to preview every command:
 
@@ -337,11 +386,17 @@ Use explicit skip flags to resume from partial progress:
 # Install optional observability layer only
 ./install.sh --use-existing-cluster --with-observability --skip-cluster --skip-infra --skip-issuer --skip-app --deploy-mode skip
 
+# Deploy standalone debug pod only
+./install.sh --use-existing-cluster --deploy-mode skip --skip-infra --skip-issuer --skip-app --with-debug-pod
+
+# Deploy standalone debug pod with custom image/namespace/name
+./install.sh --use-existing-cluster --deploy-mode skip --skip-infra --skip-issuer --skip-app --with-debug-pod --debug-pod-image your-registry/johnny-5-debug:tag --debug-pod-namespace default --debug-pod-name johnny-5-debug
+
 # Deploy app with HPA enabled
-./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes --enable-hpa --hpa-min-replicas 2 --hpa-max-replicas 10 --hpa-target-cpu 80 --email your-email@example.com --domain your-domain.example.com
+./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes --enable-hpa --hpa-min-replicas 1 --hpa-max-replicas 3 --hpa-target-cpu 80 --hpa-target-mem 80 --email your-email@example.com --domain your-domain.example.com
 ```
 
-### 10.2 One-Command Demo Target
+### 11.2 One-Command Demo Target
 
 Use Makefile automation to install infra, observability, issuer, and app with HPA in one command:
 
@@ -355,7 +410,8 @@ Optional HPA tuning:
 make install-full-observability \
   EMAIL=your-email@example.com \
   DOMAIN=your-domain.example.com \
-  HPA_MIN_REPLICAS=2 \
-  HPA_MAX_REPLICAS=12 \
-  HPA_TARGET_CPU=75
+  HPA_MIN_REPLICAS=1 \
+  HPA_MAX_REPLICAS=3 \
+  HPA_TARGET_CPU=75 \
+  HPA_TARGET_MEM=80
 ```
