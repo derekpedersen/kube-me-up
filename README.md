@@ -1,244 +1,42 @@
 # Kube Me Up
 
-Kube Me Up is a deterministic Kubernetes bootstrap workflow for getting from fresh cluster to live HTTPS traffic.
+Kube Me Up is a script-first path from fresh cluster to live HTTPS traffic.
 
-It is intentionally simple and script-driven: no custom controllers, no hidden control plane, just `kubectl`, `helm`, and `make` with an operator-safe flow.
+It installs ingress, TLS automation, metrics, and a sample app with safe reruns and resume controls.
 
-## Why This Repo Exists
+I built and refined these base setups as a founding engineer, and they reflect the explicit trade-off and operational thinking expected at staff and principal scope.
 
-This repository is a reference implementation for senior and founding engineers who want infrastructure automation that is:
+## What You Get
 
-1. Safe to rerun (`helm upgrade --install`, preflight checks, readiness gates).
-2. Easy to resume (`--skip-cluster`, `--skip-infra`, `--skip-issuer`, `--skip-app`).
-3. Easy to inspect (`--dry-run` prints commands before any cluster mutation).
-4. Scoped and honest (DOKS automation is built-in; other clouds are supported via existing-cluster path).
+1. `ingress-nginx` for routing
+2. `cert-manager` + ClusterIssuer for TLS
+3. `metrics-server` for `kubectl top` and HPA inputs
+4. Optional `kube-prometheus-stack` for Prometheus and Grafana
+5. Optional HPA tuning for `johnny-5-alive`
+6. Optional standalone debug pod in `johnny-5-debug`
 
-The workflow is designed to keep decisions explicit: trade-offs, operational boundaries, and execution steps are all visible in the commands and flags.
+## Quick Start
 
-## What This Includes
-
-1. Idempotent infrastructure install with Helm.
-2. Separation of concerns between cluster provisioning, infrastructure, issuer, and app deployment.
-3. Runtime overrides instead of mutating tracked manifests.
-4. Readiness validation before claiming success.
-5. Optional observability stack (Prometheus + Grafana).
-6. Optional HPA configuration for the sample app.
-7. Optional standalone debug pod workflow in `johnny-5-debug`.
-
-## Architecture
-
-```mermaid
-flowchart TD
-        U[Internet Users] --> DNS[DNS A/AAAA Record]
-        DNS --> LB[Cloud Load Balancer]
-        LB --> NGINX[ingress-nginx controller]
-        NGINX --> APP[johnny-5-alive service]
-        APP --> POD[johnny-5-alive pod]
-
-        CM[cert-manager] --> ISSUER[ClusterIssuer letsencrypt-prod]
-        ISSUER --> NGINX
-
-        METRICS[metrics-server] --> K8S[Kubernetes API]
-        K8S --> OPS[kubectl top and HPA inputs]
-```
-
-## Design Choices and Trade-Offs
-
-1. `ingress-nginx`: broad compatibility and straightforward operations for HTTP routing.
-2. `cert-manager` with ACME HTTP-01: simple TLS automation, but requires public DNS to resolve correctly to ingress.
-3. `metrics-server`: enables `kubectl top` and autoscaling signals with minimal setup.
-4. `kube-prometheus-stack` (optional): adds historical metrics and dashboards, but increases cluster footprint.
-5. Guided `install.sh` plus explicit flags: low-friction onboarding without hiding what runs.
-
-## Standalone Debug Workload
-
-`johnny-5-debug` is separate from `johnny-5-alive` and is designed for exec-heavy Kubernetes testing.
-
-Included tooling in the debug image:
-
-- `kubectl`, `helm`, `yq`
-- `curl`, `wget`, `nc`, `dig`, `ping`, `iproute2`, `tcpdump`
-- `jq`, `openssl`, and shell utilities
-
-Build and deploy debug pod with root Makefile:
-
-```bash
-make debug-build
-make debug-build-publish
-make debug-deploy-pod
-make debug-exec
-```
-
-Custom image/namespace/pod name:
-
-```bash
-make debug-deploy-pod \
-    DEBUG_IMAGE=your-registry/johnny-5-debug:tag \
-    DEBUG_NAMESPACE=default \
-    DEBUG_POD_NAME=johnny-5-debug
-```
-
-Non-goal: this is not a full platform framework. It is a focused bootstrap workflow and operational baseline.
-
-## Prerequisites
-
-- `kubectl`
-- `helm`
-- `docker` (only for local Docker deploy mode)
-- `make`
-- `git`
-- `doctl` (only for installer-managed DOKS cluster creation)
-
-Cloud docs for manual cluster setup:
-
-- GKE: https://cloud.google.com/kubernetes-engine/docs/deploy-app-cluster
-- EKS: https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html
-- DOKS: https://docs.digitalocean.com/products/kubernetes/how-to/create-clusters/
-
-## Install Paths
-
-### Path A: Existing Cluster (Recommended)
-
-Run guided install:
+Existing cluster (recommended):
 
 ```bash
 chmod +x install.sh
 ./install.sh --use-existing-cluster
 ```
 
-Non-interactive example:
+Preview only (no changes):
+
+```bash
+./install.sh --dry-run --use-existing-cluster
+```
+
+Full stack with observability + HPA:
 
 ```bash
 ./install.sh \
     --use-existing-cluster \
     --deploy-mode kubernetes \
     --with-observability \
-    --enable-hpa \
-    --domain alive.example.com \
-    --email you@example.com
-```
-
-Preview without execution:
-
-```bash
-./install.sh --dry-run --use-existing-cluster
-```
-
-Resume after partial completion:
-
-```bash
-./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes
-```
-
-Enable optional observability only:
-
-```bash
-./install.sh --use-existing-cluster --with-observability --skip-app --deploy-mode skip
-```
-
-### Path B: DOKS Cluster Creation
-
-The installer can create or reuse a DOKS cluster when `--use-existing-cluster` is not set.
-
-```bash
-./install.sh --cloud doks --cluster-name kube-me-up --region nyc3
-```
-
-For non-DOKS cluster creation, create cluster manually and rerun with `--use-existing-cluster`.
-
-### Raw GitHub Script
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash
-```
-
-With flags:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/derekpedersen/kube-me-up/main/install.sh | bash -s -- --use-existing-cluster --deploy-mode kubernetes
-```
-
-## Operational Model
-
-### Idempotency
-
-Infrastructure and app deployment use `helm upgrade --install`, so reruns converge desired state instead of requiring teardown.
-
-### Runtime Config Isolation
-
-The installer generates temporary runtime files for ClusterIssuer and Helm overrides. Tracked files remain clean while deployment-specific values are injected at runtime.
-
-### Readiness Gates
-
-The installer waits on rollout status for ingress-nginx, cert-manager, metrics-server, and app deployment before printing success paths.
-
-### Optional Observability
-
-When enabled, the installer deploys Prometheus and Grafana with `kube-prometheus-stack` into the `monitoring` namespace.
-
-### Optional HPA
-
-When enabled in Kubernetes deploy mode, runtime Helm overrides set:
-
-- `autoscaling.enabled=true`
-- `autoscaling.minReplicas`
-- `autoscaling.maxReplicas`
-- `autoscaling.targetCPUUtilizationPercentage`
-- `autoscaling.targetMemoryUtilizationPercentage`
-
-Flags:
-
-- `--enable-hpa`
-- `--hpa-min-replicas`
-- `--hpa-max-replicas`
-- `--hpa-target-cpu`
-- `--hpa-target-mem`
-
-### Resume Controls
-
-Use explicit skip flags to rerun only what you need:
-
-- `--skip-cluster`
-- `--skip-infra`
-- `--skip-observability`
-- `--skip-issuer`
-- `--skip-app`
-
-## Manual Fast Path
-
-From repo root:
-
-```bash
-make helm-charts
-kubectl apply -f cluster_issuer.yaml
-helm upgrade --install johnny-5-alive johnny-5-alive/.helm
-```
-
-Validate:
-
-```bash
-kubectl get ingressclass nginx
-kubectl get clusterissuer letsencrypt-prod
-kubectl get pods -n cert-manager
-kubectl get pods -l app.kubernetes.io/name=johnny-5-alive
-```
-
-## Deploy Modes
-
-### Kubernetes
-
-Deploy sample app through Helm into current kube context:
-
-```bash
-helm upgrade --install johnny-5-alive johnny-5-alive/.helm
-```
-
-Enable HPA through installer flags:
-
-```bash
-./install.sh \
-    --use-existing-cluster \
-    --deploy-mode kubernetes \
     --enable-hpa \
     --hpa-min-replicas 1 \
     --hpa-max-replicas 3 \
@@ -248,28 +46,9 @@ Enable HPA through installer flags:
     --email you@example.com
 ```
 
-### Docker
+## Common Workflows
 
-Run sample app locally without Kubernetes:
-
-```bash
-cd johnny-5-alive
-make run
-```
-
-Endpoint: `http://localhost:9090`
-
-### Skip
-
-Install infrastructure and skip app deployment:
-
-```bash
-./install.sh --deploy-mode skip --use-existing-cluster
-```
-
-### Pod-Only Debug Deploy
-
-Deploy only the standalone debug pod (no app, no ingress):
+Pod-only debug deploy (no app/ingress):
 
 ```bash
 ./install.sh \
@@ -281,77 +60,36 @@ Deploy only the standalone debug pod (no app, no ingress):
     --with-debug-pod
 ```
 
-Override pod image and namespace:
-
-```bash
-./install.sh \
-    --use-existing-cluster \
-    --deploy-mode skip \
-    --skip-infra \
-    --skip-issuer \
-    --skip-app \
-    --with-debug-pod \
-    --debug-pod-image your-registry/johnny-5-debug:tag \
-    --debug-pod-namespace default \
-    --debug-pod-name johnny-5-debug
-```
-
-### Observability (Optional)
-
-Install Prometheus + Grafana without changing app deployment:
+Observability only:
 
 ```bash
 ./install.sh --use-existing-cluster --with-observability --deploy-mode skip --skip-app
 ```
 
-Access Grafana locally:
+Resume app deploy only:
 
 ```bash
-kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80
+./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes
 ```
 
-## Verification Checklist
+## Makefile Shortcuts
 
-```bash
-kubectl get nodes
-kubectl get svc -n ingress-nginx ingress-nginx-controller
-kubectl get clusterissuer letsencrypt-prod
-kubectl get ingress johnny-5-alive
-kubectl get certificate -A
-kubectl get challenges -A
-kubectl top node
-kubectl get hpa johnny-5-alive
-kubectl get pods -n monitoring
-kubectl get svc -n monitoring kube-prometheus-stack-grafana
-kubectl get svc -n monitoring kube-prometheus-stack-prometheus
-kubectl get pod johnny-5-debug -n default
-```
-
-If DNS and domain are configured correctly, HTTPS should become healthy after ACME challenge completion.
-
-## Troubleshooting
-
-- Ingress has no address: check `ingress-nginx-controller` service type and allocation.
-- Cert not issuing: confirm DNS points to ingress load balancer, then inspect `kubectl get challenges -A`.
-- App unreachable: verify ingress host and TLS values used by runtime overrides.
-
-Use the full runbook for recovery and deep diagnostics: [RUNBOOK.md](RUNBOOK.md).
-
-## One-Liners
-
-Cluster ready, deploy now:
-
-```bash
-./install.sh --use-existing-cluster --deploy-mode kubernetes
-```
-
-Full demo stack (infra + Prometheus/Grafana + issuer + app with HPA):
+Full demo stack:
 
 ```bash
 make install-full-observability EMAIL=you@example.com DOMAIN=alive.example.com
 ```
 
-Optional HPA tuning for that target:
+Debug image and pod:
+
+```bash
+make debug-build
+make debug-build-publish
+make debug-deploy-pod
+make debug-exec
+```
+
+HPA tuning via Makefile vars:
 
 ```bash
 make install-full-observability \
@@ -363,8 +101,39 @@ make install-full-observability \
     HPA_TARGET_MEM=80
 ```
 
-Rerun app-only deploy:
+## Debug Workload
+
+`johnny-5-debug` is separate from `johnny-5-alive` and built for exec-heavy testing.
+
+Included tools: `kubectl`, `helm`, `yq`, `curl`, `wget`, `nc`, `dig`, `ping`, `iproute2`, `tcpdump`, `jq`, `openssl`.
+
+## Verify
 
 ```bash
-./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes
+kubectl get nodes
+kubectl get svc -n ingress-nginx ingress-nginx-controller
+kubectl get clusterissuer letsencrypt-prod
+kubectl get ingress johnny-5-alive
+kubectl get hpa johnny-5-alive
+kubectl get certificate -A
+kubectl get challenges -A
+kubectl get pods -n monitoring
+kubectl get pod johnny-5-debug -n default
 ```
+
+## Prerequisites
+
+- `kubectl`
+- `helm`
+- `docker`
+- `make`
+- `git`
+- `doctl` (only for installer-managed DOKS cluster creation)
+
+## Notes
+
+1. DOKS can be created by installer; other clouds should use existing cluster mode.
+2. Installer is idempotent (`helm upgrade --install`) and supports skip/resume flags.
+3. Runtime override files are generated so tracked manifests stay unchanged.
+
+For deep troubleshooting and manual recovery, use [RUNBOOK.md](RUNBOOK.md).
