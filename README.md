@@ -4,8 +4,6 @@ Kube Me Up is a script-first path from fresh cluster to live HTTPS traffic.
 
 It installs ingress, TLS automation, metrics, and a sample app with safe reruns and resume controls.
 
-I built and refined these base setups as a founding engineer, and they reflect the explicit trade-off and operational thinking expected at staff and principal scope.
-
 ## What You Get
 
 1. `ingress-nginx` for routing
