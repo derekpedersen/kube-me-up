@@ -1,4 +1,4 @@
-.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability debug-build debug-publish debug-build-publish debug-deploy-pod debug-exec debug-delete-pod ingress certs metrics-api helm-charts
+.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability debug-build debug-publish debug-build-publish debug-deploy-pod debug-exec debug-delete-pod doctl-auth deploy-main ingress certs metrics-api helm-charts
 
 HPA_MIN_REPLICAS ?= 1
 HPA_MAX_REPLICAS ?= 3
@@ -9,6 +9,7 @@ DEBUG_NAMESPACE ?= default
 DEBUG_POD_NAME ?= johnny-5-debug
 DEBUG_REPO ?= derekpedersen/johnny-5-debug
 DEBUG_TAG ?= $(shell git rev-parse --short HEAD)
+DOKS_CLUSTER_NAME ?= kube-me-up
 
 helm-repos:
 	helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx/
@@ -96,6 +97,47 @@ debug-exec:
 
 debug-delete-pod:
 	$(MAKE) -C johnny-5-debug delete-pod NAMESPACE=$(DEBUG_NAMESPACE) POD_NAME=$(DEBUG_POD_NAME)
+
+doctl-auth:
+	@if ! command -v doctl >/dev/null 2>&1; then \
+		echo "doctl is required for this target"; \
+		exit 1; \
+	fi
+	@if [ -n "$(DO_API_TOKEN)" ]; then \
+		doctl auth init -t "$(DO_API_TOKEN)"; \
+	else \
+		echo "DO_API_TOKEN not set, using existing doctl auth context"; \
+	fi
+	@if [ -z "$(DOKS_CLUSTER_NAME)" ]; then \
+		echo "DOKS_CLUSTER_NAME is required. Example: make doctl-auth DOKS_CLUSTER_NAME=kube-me-up"; \
+		exit 1; \
+	fi
+	doctl kubernetes cluster kubeconfig save "$(DOKS_CLUSTER_NAME)"
+
+deploy-main:
+	$(MAKE) doctl-auth DOKS_CLUSTER_NAME="$(DOKS_CLUSTER_NAME)"
+	@if [ -z "$(ALIVE_REPO)" ]; then \
+		echo "ALIVE_REPO is required. Example: make deploy-main ALIVE_REPO=derekpedersen/johnny-5-alive"; \
+		exit 1; \
+	fi
+	@if [ -z "$(ALIVE_TAG)" ]; then \
+		echo "ALIVE_TAG is required. Example: make deploy-main ALIVE_TAG=$$(git rev-parse HEAD)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(DEBUG_REPO)" ]; then \
+		echo "DEBUG_REPO is required. Example: make deploy-main DEBUG_REPO=derekpedersen/johnny-5-debug"; \
+		exit 1; \
+	fi
+	@if [ -z "$(DEBUG_TAG)" ]; then \
+		echo "DEBUG_TAG is required. Example: make deploy-main DEBUG_TAG=$$(git rev-parse HEAD)"; \
+		exit 1; \
+	fi
+	helm upgrade --install johnny-5-alive johnny-5-alive/.helm \
+		--set image.repository="$(ALIVE_REPO)" \
+		--set image.tag="$(ALIVE_TAG)"
+	$(MAKE) debug-deploy-pod DEBUG_IMAGE=$(DEBUG_REPO):$(DEBUG_TAG) DEBUG_NAMESPACE=$(DEBUG_NAMESPACE) DEBUG_POD_NAME=$(DEBUG_POD_NAME)
+	kubectl get pods -n $(DEBUG_NAMESPACE) -l app.kubernetes.io/name=johnny-5-debug
+	kubectl get deployment -n $(DEBUG_NAMESPACE) -l app.kubernetes.io/name=johnny-5-alive
 
 ingress: install-ingress-nginx
 
