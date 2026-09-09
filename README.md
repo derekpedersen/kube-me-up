@@ -2,7 +2,11 @@
 
 Kube Me Up is a script-first path from fresh cluster to live HTTPS traffic.
 
-It installs ingress, TLS automation, metrics, and a sample app with safe reruns and resume controls.
+It installs ingress, TLS automation, metrics, and a sample app.
+
+The Helm-based install and uninstall flows are Kubernetes-provider agnostic for existing clusters, so they work across AKS, EKS, GKE, DOKS, and similar environments. Automatic cluster creation is still DOKS-first.
+
+Repo guidance for automation lives in [AGENTS.md](AGENTS.md). Manual recovery steps live in [RUNBOOK.md](RUNBOOK.md).
 
 ## What You Get
 
@@ -70,6 +74,27 @@ Resume app deploy only:
 ./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes
 ```
 
+## Uninstall
+
+Preview the cleanup path:
+
+```bash
+./uninstall.sh --dry-run
+```
+
+Remove the managed stack from the current cluster:
+
+```bash
+chmod +x uninstall.sh
+./uninstall.sh
+```
+
+Delete the DOKS cluster too:
+
+```bash
+./uninstall.sh --delete-cluster --yes
+```
+
 ## Makefile Shortcuts
 
 Full demo stack:
@@ -85,6 +110,12 @@ make debug-build
 make debug-build-publish
 make debug-deploy-pod
 make debug-exec
+```
+
+Cleanup:
+
+```bash
+make uninstall
 ```
 
 HPA tuning via Makefile vars:
@@ -127,11 +158,5 @@ kubectl get pod johnny-5-debug -n default
 - `make`
 - `git`
 - `doctl` (only for installer-managed DOKS cluster creation)
-
-## Notes
-
-1. DOKS can be created by installer; other clouds should use existing cluster mode.
-2. Installer is idempotent (`helm upgrade --install`) and supports skip/resume flags.
-3. Runtime override files are generated so tracked manifests stay unchanged.
 
 For deep troubleshooting and manual recovery, use [RUNBOOK.md](RUNBOOK.md).

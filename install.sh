@@ -62,6 +62,8 @@ usage() {
   cat <<'EOF'
 Kube Me Up installer
 
+The runtime install flow works with any existing Kubernetes cluster. Automatic cluster creation is DOKS-only.
+
 Usage:
   ./install.sh [options]
 

@@ -327,6 +327,12 @@ Likely causes:
 
 ## 10. Cleanup
 
+Prefer the script in repo root for normal teardown:
+
+```bash
+./uninstall.sh
+```
+
 Remove app:
 
 ```bash

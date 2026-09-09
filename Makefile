@@ -1,4 +1,4 @@
-.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability debug-build debug-publish debug-build-publish debug-deploy-pod debug-exec debug-delete-pod doctl-auth deploy-main ingress certs metrics-api helm-charts
+.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability uninstall debug-build debug-publish debug-build-publish debug-deploy-pod debug-exec debug-delete-pod doctl-auth deploy-main ingress certs metrics-api helm-charts
 
 HPA_MIN_REPLICAS ?= 1
 HPA_MAX_REPLICAS ?= 3
@@ -79,6 +79,10 @@ deploy-app-hpa:
 install-full-observability: helm-charts install-observability install-issuer deploy-app-hpa observability-verify
 	@echo "Full stack complete: infra + observability + issuer + app(HPA)"
 	@echo "Grafana: kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80"
+
+uninstall:
+	chmod +x uninstall.sh
+	./uninstall.sh
 
 debug-build:
 	$(MAKE) -C johnny-5-debug build IMAGE=$(DEBUG_IMAGE)
