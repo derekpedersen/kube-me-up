@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   parameters {
-    booleanParam(name: 'RUN_DEPLOY', defaultValue: false, description: 'Manually enable deployment stages')
+    booleanParam(name: 'RUN_DEPLOY', defaultValue: false, description: 'Manually enable and approve deployment stages')
     choice(name: 'DEPLOY_STRATEGY', choices: ['make', 'install-script'], description: 'Deployment path when RUN_DEPLOY=true')
     string(name: 'DEPLOY_DOMAIN', defaultValue: 'alive.example.com', description: 'Ingress domain for install-script deploy')
     string(name: 'LETSENCRYPT_EMAIL', defaultValue: 'you@example.com', description: 'Email for install-script deploy')
@@ -48,21 +48,19 @@ pipeline {
       }
     }
 
-    stage('Validate Manual Deploy Trigger (main)') {
+    stage('Approve Main Deploy (main)') {
       when {
         allOf {
           branch 'main'
           expression { params.RUN_DEPLOY }
         }
       }
+      input {
+        message 'Approve deployment to main?'
+        ok 'Approve deploy'
+      }
       steps {
-        script {
-          def userCause = currentBuild.rawBuild.getCause(hudson.model.Cause$UserIdCause)
-          if (userCause == null) {
-            error('RUN_DEPLOY=true is only allowed for manual Jenkins UI triggers. SCM/webhook triggers are blocked from deploying.')
-          }
-          echo "Manual deploy approved by: ${userCause.userName ?: userCause.userId}"
-        }
+        echo 'Main deployment approved. Proceeding to selected deploy path.'
       }
     }
 
