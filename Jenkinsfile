@@ -36,10 +36,7 @@ pipeline {
       }
     }
 
-    stage('Push Images (main)') {
-      when {
-        branch 'main'
-      }
+    stage('Push Images') {
       steps {
         withDockerRegistry([credentialsId: env.DOCKERHUB_CREDENTIALS_ID, url: env.DOCKERHUB_URL]) {
           sh 'make -C johnny-5-alive publish ALIVE_REPO=${ALIVE_REPO}'
