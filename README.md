@@ -17,70 +17,96 @@ Repo guidance for automation lives in [AGENTS.md](AGENTS.md). Manual recovery st
 5. Optional HPA tuning for `johnny-5-alive`
 6. Optional standalone debug pod in `johnny-5-debug`
 
+## Script Layout
+
+This repo is intentionally split by responsibility:
+
+| Script | Scope | Installs / Runs |
+|---|---|---|
+| [install.sh](install.sh) | root orchestrator | Calls the shared infra installers and then the app/debug installers in order |
+| [k8s-tools/nginx.install.sh](k8s-tools/nginx.install.sh) | shared infra | ingress-nginx |
+| [k8s-tools/cert-manager.install.sh](k8s-tools/cert-manager.install.sh) | shared infra | cert-manager |
+| [k8s-tools/metrics.install.sh](k8s-tools/metrics.install.sh) | shared infra | metrics-server for `kubectl top` and HPA inputs |
+| [k8s-tools/issuer.install.sh](k8s-tools/issuer.install.sh) | shared infra | LetsEncrypt ClusterIssuer |
+| [johnny-5-alive/install.sh](johnny-5-alive/install.sh) | app-local | deploys the sample app |
+| [johnny-5-debug/install.sh](johnny-5-debug/install.sh) | debug-local | deploys the standalone debug pod |
+
 ## Quick Start
 
-The full stack installer is now under the tool folder:
+Use the root orchestrator to run the full flow:
 
 ```bash
-chmod +x k8s-tools/stack.install.sh
-./k8s-tools/stack.install.sh --use-existing-cluster
+chmod +x install.sh
+./install.sh --use-existing-cluster
 ```
 
-Ingress-only install:
+Install one shared component directly:
 
 ```bash
 chmod +x k8s-tools/nginx.install.sh
 ./k8s-tools/nginx.install.sh
 ```
 
-The root `install.sh` wrapper remains for compatibility and forwards to the full stack installer.
+Deploy just the app:
+
+```bash
+chmod +x johnny-5-alive/install.sh
+./johnny-5-alive/install.sh --use-existing-cluster
+```
+
+Deploy just the debug pod:
+
+```bash
+chmod +x johnny-5-debug/install.sh
+./johnny-5-debug/install.sh --use-existing-cluster
+```
 
 Preview only (no changes):
 
 ```bash
-./k8s-tools/stack.install.sh --dry-run --use-existing-cluster
+./install.sh --dry-run --use-existing-cluster
 ```
 
-Full stack with observability + HPA:
-
-```bash
-./k8s-tools/stack.install.sh \
-    --use-existing-cluster \
-    --deploy-mode kubernetes \
-    --with-observability \
-    --enable-hpa \
-    --hpa-min-replicas 1 \
-    --hpa-max-replicas 3 \
-    --hpa-target-cpu 80 \
-    --hpa-target-mem 80 \
-    --domain alive.example.com \
-    --email you@example.com
-```
-
-## Common Workflows
-
-Pod-only debug deploy (no app/ingress):
+Optional full stack variation with app-specific settings:
 
 ```bash
 ./install.sh \
     --use-existing-cluster \
-    --deploy-mode skip \
-    --skip-infra \
-    --skip-issuer \
-    --skip-app \
-    --with-debug-pod
+    --deploy-mode kubernetes \
+    --domain alive.example.com \
+    --email you@example.com
 ```
 
-Observability only:
+Optional observability stack:
 
 ```bash
-./install.sh --use-existing-cluster --with-observability --deploy-mode skip --skip-app
+./install.sh --use-existing-cluster --with-observability --skip-app --skip-debug
 ```
 
-Resume app deploy only:
+## Common Workflows
+
+Install only shared infrastructure:
 
 ```bash
-./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes
+./install.sh --use-existing-cluster --skip-app --skip-debug
+```
+
+Deploy the app only:
+
+```bash
+./install.sh --use-existing-cluster --skip-infra --skip-issuer --skip-debug
+```
+
+Deploy the debug pod only:
+
+```bash
+./install.sh --use-existing-cluster --skip-infra --skip-issuer --skip-app
+```
+
+Resume app deployment after the cluster and infra are ready:
+
+```bash
+./install.sh --use-existing-cluster --skip-infra --skip-issuer --deploy-mode kubernetes
 ```
 
 ## Uninstall

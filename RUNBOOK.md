@@ -58,10 +58,29 @@ kubectl get nodes
 
 ## 3. Install Infrastructure Layer
 
-This installs ingress, cert-manager, and metrics-server.
+The repo now splits infra work by responsibility instead of keeping everything in one installer.
+
+| Script | What it installs |
+|---|---|
+| [install.sh](install.sh) | root orchestrator for the full flow |
+| [k8s-tools/nginx.install.sh](k8s-tools/nginx.install.sh) | ingress-nginx |
+| [k8s-tools/cert-manager.install.sh](k8s-tools/cert-manager.install.sh) | cert-manager |
+| [k8s-tools/metrics.install.sh](k8s-tools/metrics.install.sh) | metrics-server for `kubectl top` and HPA inputs |
+| [k8s-tools/issuer.install.sh](k8s-tools/issuer.install.sh) | letsencrypt ClusterIssuer |
+
+Run the shared infra layer as a whole:
 
 ```bash
-make helm-charts
+./install.sh --use-existing-cluster --skip-app --skip-debug
+```
+
+Or call individual components directly:
+
+```bash
+./k8s-tools/nginx.install.sh
+./k8s-tools/cert-manager.install.sh
+./k8s-tools/metrics.install.sh
+./k8s-tools/issuer.install.sh --email you@example.com
 ```
 
 Validate readiness:
@@ -76,10 +95,12 @@ kubectl get apiservice v1beta1.metrics.k8s.io
 
 ## 4. Optional Observability Layer (Prometheus + Grafana)
 
+If you want the Prometheus/Grafana stack, use the repo’s observability entrypoint or keep it as a separate infra add-on.
+
 Install:
 
 ```bash
-make install-observability
+./k8s-tools/observability.install.sh
 ```
 
 Validate readiness:
@@ -99,6 +120,12 @@ kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80
 ## 5. Optional Standalone Debug Pod
 
 Use `johnny-5-debug` for exec-based connectivity and Kubernetes testing without deploying the app stack.
+
+This lives in its own project-local installer instead of the shared infra scripts:
+
+```bash
+./johnny-5-debug/install.sh --use-existing-cluster
+```
 
 Build image locally:
 
@@ -357,17 +384,25 @@ doctl kubernetes cluster delete kube-me-up
 
 ## 11. Installer Mapping
 
-`install.sh` implements this runbook in guided form:
+The repository now follows a clear installer split:
+
+1. Root orchestrator: [install.sh](install.sh)
+2. Shared infrastructure: [k8s-tools](k8s-tools)
+3. App deployment: [johnny-5-alive/install.sh](johnny-5-alive/install.sh)
+4. Debug pod: [johnny-5-debug/install.sh](johnny-5-debug/install.sh)
+
+This keeps cluster-level capability installs separate from app behavior and debug tooling.
+
+The root script implements the guided flow in this order:
 
 1. Preflight checks.
 2. Cluster path prompts.
-3. Optional debug pod deployment.
-4. Infrastructure install.
-5. Optional observability install.
-6. Runtime ClusterIssuer generation and apply.
-7. Deploy mode prompt (Kubernetes or Docker).
-8. Optional HPA runtime overrides for Kubernetes deploy mode.
-9. Post-install verification summary.
+3. Shared infra installer calls.
+4. App deployment.
+5. Debug deployment.
+6. ClusterIssuer apply.
+7. Optional observability helpers.
+8. Post-install verification summary.
 
 ### 11.1 Dry Run and Resume Flags
 
@@ -404,20 +439,21 @@ Use explicit skip flags to resume from partial progress:
 
 ### 11.2 One-Command Demo Target
 
-Use Makefile automation to install infra, observability, issuer, and app with HPA in one command:
+Use the repo root orchestrator for the guided flow:
 
 ```bash
-make install-full-observability EMAIL=your-email@example.com DOMAIN=your-domain.example.com
+./install.sh --use-existing-cluster --with-observability --domain your-domain.example.com --email your-email@example.com
 ```
 
-Optional HPA tuning:
+Skip app or debug deploy if you only want the cluster foundation:
 
 ```bash
-make install-full-observability \
-  EMAIL=your-email@example.com \
-  DOMAIN=your-domain.example.com \
-  HPA_MIN_REPLICAS=1 \
-  HPA_MAX_REPLICAS=3 \
-  HPA_TARGET_CPU=75 \
-  HPA_TARGET_MEM=80
+./install.sh --use-existing-cluster --skip-app --skip-debug
+./install.sh --use-existing-cluster --skip-infra --skip-issuer --skip-debug
+```
+
+Legacy aliases are still accepted for compatibility with earlier examples:
+
+```bash
+./install.sh --use-existing-cluster --skip-cluster --with-debug-pod
 ```

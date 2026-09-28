@@ -38,9 +38,14 @@ pipeline {
 
     stage('Push Images') {
       steps {
-        withDockerRegistry([credentialsId: env.DOCKERHUB_CREDENTIALS_ID, url: env.DOCKERHUB_URL]) {
-          sh 'make -C johnny-5-alive publish ALIVE_REPO=${ALIVE_REPO}'
-          sh 'make debug-publish DEBUG_REPO=${DEBUG_REPO} DEBUG_TAG=${GIT_COMMIT}'
+        withCredentials([usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+          sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+make -C johnny-5-alive publish ALIVE_REPO=${ALIVE_REPO}
+make debug-publish DEBUG_REPO=${DEBUG_REPO} DEBUG_TAG=${GIT_COMMIT}
+'''
         }
       }
     }
