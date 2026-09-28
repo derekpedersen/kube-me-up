@@ -19,23 +19,32 @@ Repo guidance for automation lives in [AGENTS.md](AGENTS.md). Manual recovery st
 
 ## Quick Start
 
-Existing cluster (recommended):
+The full stack installer is now under the tool folder:
 
 ```bash
-chmod +x install.sh
-./install.sh --use-existing-cluster
+chmod +x k8s-tools/stack.install.sh
+./k8s-tools/stack.install.sh --use-existing-cluster
 ```
+
+Ingress-only install:
+
+```bash
+chmod +x k8s-tools/nginx.install.sh
+./k8s-tools/nginx.install.sh
+```
+
+The root `install.sh` wrapper remains for compatibility and forwards to the full stack installer.
 
 Preview only (no changes):
 
 ```bash
-./install.sh --dry-run --use-existing-cluster
+./k8s-tools/stack.install.sh --dry-run --use-existing-cluster
 ```
 
 Full stack with observability + HPA:
 
 ```bash
-./install.sh \
+./k8s-tools/stack.install.sh \
     --use-existing-cluster \
     --deploy-mode kubernetes \
     --with-observability \
