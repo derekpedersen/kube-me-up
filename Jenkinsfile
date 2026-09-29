@@ -1,3 +1,18 @@
+def publishIfMain() {
+  if (env.BRANCH_NAME == 'main') {
+    withDockerRegistry([credentialsId: env.DOCKERHUB_CREDENTIALS_ID, url: env.DOCKERHUB_URL]) {
+      sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+make -C johnny-5-alive publish ALIVE_REPO=${ALIVE_REPO} ALIVE_TAG=${GIT_COMMIT}
+make -C johnny-5-debug publish DEBUG_REPO=${DEBUG_REPO} DEBUG_TAG=${GIT_COMMIT}
+'''
+    }
+  } else {
+    echo "Skipping Docker Hub publish for branch ${env.BRANCH_NAME}"
+  }
+}
+
 pipeline {
   agent any
 
@@ -33,20 +48,7 @@ pipeline {
       steps {
         sh 'make -C johnny-5-alive docker'
         sh 'make debug-build'
-      }
-    }
-
-    stage('Push Images') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-          sh '''#!/usr/bin/env bash
-set -euo pipefail
-
-echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-make -C johnny-5-alive publish ALIVE_REPO=${ALIVE_REPO}
-make debug-publish DEBUG_REPO=${DEBUG_REPO} DEBUG_TAG=${GIT_COMMIT}
-'''
-        }
+        publishIfMain()
       }
     }
 

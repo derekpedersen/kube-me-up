@@ -2,7 +2,7 @@ IMAGE ?= johnny-5-debug:latest
 NAMESPACE ?= default
 POD_NAME ?= johnny-5-debug
 DEBUG_REPO ?= derekpedersen/johnny-5-debug
-DEBUG_TAG ?= latest
+DEBUG_TAG ?= $(shell git rev-parse --short HEAD)
 
 build:
 	docker build -t $(IMAGE) .
