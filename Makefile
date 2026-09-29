@@ -1,9 +1,12 @@
-.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability uninstall debug-build debug-publish debug-build-publish debug-deploy-pod debug-exec debug-delete-pod doctl-auth deploy-main ingress certs metrics-api helm-charts
+.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability uninstall alive-build alive-publish alive-build-publish debug-build debug-publish debug-build-publish publish-all debug-deploy-pod debug-exec debug-delete-pod doctl-auth deploy-main ingress certs metrics-api helm-charts
 
 HPA_MIN_REPLICAS ?= 1
 HPA_MAX_REPLICAS ?= 3
 HPA_TARGET_CPU ?= 80
 HPA_TARGET_MEM ?= 80
+ALIVE_IMAGE ?= johnny-5-alive:latest
+ALIVE_REPO ?= derekpedersen/johnny-5-alive
+ALIVE_TAG ?= $(shell git rev-parse --short HEAD)
 DEBUG_IMAGE ?= johnny-5-debug:latest
 DEBUG_NAMESPACE ?= default
 DEBUG_POD_NAME ?= johnny-5-debug
@@ -84,6 +87,15 @@ uninstall:
 	chmod +x uninstall.sh
 	./uninstall.sh
 
+alive-build:
+	$(MAKE) -C johnny-5-alive build IMAGE=$(ALIVE_IMAGE)
+
+alive-publish:
+	$(MAKE) -C johnny-5-alive publish ALIVE_REPO=$(ALIVE_REPO) ALIVE_TAG=$(ALIVE_TAG)
+
+alive-build-publish: alive-build alive-publish
+	@echo "Alive image published: $(ALIVE_REPO):$(ALIVE_TAG)"
+
 debug-build:
 	$(MAKE) -C johnny-5-debug build IMAGE=$(DEBUG_IMAGE)
 
@@ -92,6 +104,9 @@ debug-publish:
 
 debug-build-publish: debug-build debug-publish
 	@echo "Debug image published: $(DEBUG_REPO):$(DEBUG_TAG)"
+
+publish-all: alive-build-publish debug-build-publish
+	@echo "All images published."
 
 debug-deploy-pod:
 	$(MAKE) -C johnny-5-debug deploy-pod-image IMAGE=$(DEBUG_IMAGE) NAMESPACE=$(DEBUG_NAMESPACE) POD_NAME=$(DEBUG_POD_NAME)
@@ -139,7 +154,7 @@ deploy-main:
 	helm upgrade --install johnny-5-alive johnny-5-alive/.helm \
 		--set image.repository="$(ALIVE_REPO)" \
 		--set image.tag="$(ALIVE_TAG)"
-	$(MAKE) debug-deploy-pod DEBUG_IMAGE=$(DEBUG_REPO):$(DEBUG_TAG) DEBUG_NAMESPACE=$(DEBUG_NAMESPACE) DEBUG_POD_NAME=$(DEBUG_POD_NAME)
+	$(MAKE) debug-deploy-pod DEBUG_IMAGE="$(DEBUG_REPO):$(DEBUG_TAG)" DEBUG_NAMESPACE=$(DEBUG_NAMESPACE) DEBUG_POD_NAME=$(DEBUG_POD_NAME)
 	kubectl get pods -n $(DEBUG_NAMESPACE) -l app.kubernetes.io/name=johnny-5-debug
 	kubectl get deployment -n $(DEBUG_NAMESPACE) -l app.kubernetes.io/name=johnny-5-alive
 
