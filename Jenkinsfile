@@ -54,17 +54,26 @@ pipeline {
 
     stage('Approve Main Deploy (main)') {
       when {
+        beforeInput true
         allOf {
           branch 'main'
           expression { params.RUN_DEPLOY }
         }
       }
-      input {
-        message 'Approve deployment to main?'
-        ok 'Approve deploy'
-      }
       steps {
-        echo 'Main deployment approved. Proceeding to selected deploy path.'
+        script {
+          env.MAIN_DEPLOY_DECISION = input(
+            message: 'Deploy to main or skip?',
+            ok: 'Continue',
+            parameters: [choice(name: 'MAIN_DEPLOY_DECISION', choices: ['deploy', 'skip'], description: 'Choose deploy to run the main deploy stages or skip to end the pipeline successfully')]
+          )
+
+          if (env.MAIN_DEPLOY_DECISION == 'skip') {
+            echo 'Main deploy skipped by user choice.'
+          } else {
+            echo 'Main deployment approved. Proceeding to selected deploy path.'
+          }
+        }
       }
     }
 
@@ -73,6 +82,7 @@ pipeline {
         allOf {
           branch 'main'
           expression { params.RUN_DEPLOY }
+          expression { env.MAIN_DEPLOY_DECISION == 'deploy' }
           expression { params.DEPLOY_STRATEGY == 'make' }
         }
       }
@@ -99,6 +109,7 @@ make deploy-main \
         allOf {
           branch 'main'
           expression { params.RUN_DEPLOY }
+          expression { env.MAIN_DEPLOY_DECISION == 'deploy' }
           expression { params.DEPLOY_STRATEGY == 'install-script' }
         }
       }
