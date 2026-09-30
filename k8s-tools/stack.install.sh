@@ -51,6 +51,7 @@ run_orchestrator() {
   echo "Stack flow is intentionally delegated to dedicated install steps."
   echo "Recommended commands:"
   echo "  ./k8s-tools/nginx.install.sh"
+  echo "  ./k8s-tools/external-dns.install.sh --domain-filter example.com --txt-owner-id kube-me-up --do-api-token \"$DO_API_TOKEN\""
   echo "  ./k8s-tools/cert-manager.install.sh"
   echo "  ./k8s-tools/metrics.install.sh"
   echo "  ./k8s-tools/issuer.install.sh --email you@example.com"

@@ -1,4 +1,4 @@
-.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-observability observability-verify install-issuer deploy-app-hpa install-full-observability uninstall alive-build alive-publish alive-build-publish debug-build debug-publish debug-build-publish publish-all debug-deploy-pod debug-exec debug-delete-pod doctl-auth deploy-main ingress certs metrics-api helm-charts
+.PHONY: helm-repos install-ingress-nginx install-cert-manager install-metrics-server install-external-dns external-dns-verify install-observability observability-verify install-issuer deploy-app-hpa install-full-observability uninstall alive-build alive-publish alive-build-publish debug-build debug-publish debug-build-publish publish-all debug-deploy-pod debug-exec debug-delete-pod doctl-auth deploy-main ingress certs metrics-api helm-charts
 
 HPA_MIN_REPLICAS ?= 1
 HPA_MAX_REPLICAS ?= 3
@@ -13,11 +13,15 @@ DEBUG_POD_NAME ?= johnny-5-debug
 DEBUG_REPO ?= derekpedersen/johnny-5-debug
 DEBUG_TAG ?= $(shell git rev-parse --short HEAD)
 DOKS_CLUSTER_NAME ?= kube-me-up
+EXTERNAL_DNS_NAMESPACE ?= external-dns
+EXTERNAL_DNS_RELEASE ?= external-dns
+EXTERNAL_DNS_SECRET ?= external-dns
 
 helm-repos:
 	helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx/
 	helm repo add jetstack https://charts.jetstack.io
 	helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+	helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	helm repo update
 
@@ -38,6 +42,43 @@ install-metrics-server: helm-repos
 		--set args={--kubelet-insecure-tls,--kubelet-preferred-address-types=InternalIP\,ExternalIP\,Hostname}
 	kubectl get deployment metrics-server -n kube-system
 	kubectl get apiservice v1beta1.metrics.k8s.io
+
+install-external-dns: helm-repos
+	@if [ -z "$(DO_API_TOKEN)" ]; then \
+		echo "DO_API_TOKEN is required. Example: make install-external-dns DO_API_TOKEN=... EXTERNAL_DNS_DOMAIN_FILTER=example.com EXTERNAL_DNS_TXT_OWNER_ID=kube-me-up"; \
+		exit 1; \
+	fi
+	@if [ -z "$(EXTERNAL_DNS_TXT_OWNER_ID)" ]; then \
+		echo "EXTERNAL_DNS_TXT_OWNER_ID is required. Example: make install-external-dns EXTERNAL_DNS_TXT_OWNER_ID=kube-me-up"; \
+		exit 1; \
+	fi
+	@if [ -z "$(EXTERNAL_DNS_DOMAIN_FILTER)" ]; then \
+		echo "WARNING: EXTERNAL_DNS_DOMAIN_FILTER not set. ExternalDNS will sync all ingress hosts it sees."; \
+	fi
+	kubectl get namespace $(EXTERNAL_DNS_NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(EXTERNAL_DNS_NAMESPACE)
+	kubectl -n $(EXTERNAL_DNS_NAMESPACE) create secret generic $(EXTERNAL_DNS_SECRET) --from-literal=do_token="$(DO_API_TOKEN)" --dry-run=client -o yaml | kubectl apply -f -
+	helm upgrade --install $(EXTERNAL_DNS_RELEASE) external-dns/external-dns \
+		--namespace $(EXTERNAL_DNS_NAMESPACE) \
+		--set provider.name=digitalocean \
+		--set env[0].name=DO_TOKEN \
+		--set env[0].valueFrom.secretKeyRef.name=$(EXTERNAL_DNS_SECRET) \
+		--set env[0].valueFrom.secretKeyRef.key=do_token \
+		--set sources[0]=ingress \
+		$(if $(EXTERNAL_DNS_DOMAIN_FILTER),--set domainFilters[0]="$(EXTERNAL_DNS_DOMAIN_FILTER)") \
+		--set registry=txt \
+		--set txtOwnerId="$(EXTERNAL_DNS_TXT_OWNER_ID)" \
+		--set policy=sync
+	kubectl rollout status deployment/$(EXTERNAL_DNS_RELEASE) -n $(EXTERNAL_DNS_NAMESPACE) --timeout=5m
+
+external-dns-verify:
+	kubectl get deployment $(EXTERNAL_DNS_RELEASE) -n $(EXTERNAL_DNS_NAMESPACE)
+	kubectl get pods -n $(EXTERNAL_DNS_NAMESPACE)
+	kubectl logs -n $(EXTERNAL_DNS_NAMESPACE) deployment/$(EXTERNAL_DNS_RELEASE) --tail=40
+	@if [ -n "$(EXTERNAL_DNS_DOMAIN_FILTER)" ]; then \
+		echo "ExternalDNS domain filter: $(EXTERNAL_DNS_DOMAIN_FILTER)"; \
+	else \
+		echo "ExternalDNS domain filter: not set"; \
+	fi
 
 install-observability: helm-repos
 	helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -164,4 +205,4 @@ certs: install-cert-manager
 
 metrics-api: install-metrics-server
 
-helm-charts: install-ingress-nginx install-cert-manager install-metrics-server
+helm-charts: install-ingress-nginx install-cert-manager install-metrics-server install-external-dns

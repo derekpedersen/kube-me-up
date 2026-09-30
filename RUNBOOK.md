@@ -20,6 +20,19 @@ If you plan to create a DigitalOcean Kubernetes cluster from this workflow:
 command -v doctl
 ```
 
+Set required ExternalDNS environment variables before running shared infra installers:
+
+```bash
+export DO_API_TOKEN="your-digitalocean-api-token"
+export EXTERNAL_DNS_TXT_OWNER_ID="kube-me-up"
+```
+
+Recommended for safer DNS scoping:
+
+```bash
+export EXTERNAL_DNS_DOMAIN_FILTER="example.com"
+```
+
 ## 2. Choose Cluster Path
 
 You have two supported paths in this runbook.
@@ -64,6 +77,7 @@ The repo now splits infra work by responsibility instead of keeping everything i
 |---|---|
 | [install.sh](install.sh) | root orchestrator for the full flow |
 | [k8s-tools/nginx.install.sh](k8s-tools/nginx.install.sh) | ingress-nginx |
+| [k8s-tools/external-dns.install.sh](k8s-tools/external-dns.install.sh) | ExternalDNS with DigitalOcean DNS provider |
 | [k8s-tools/cert-manager.install.sh](k8s-tools/cert-manager.install.sh) | cert-manager |
 | [k8s-tools/metrics.install.sh](k8s-tools/metrics.install.sh) | metrics-server for `kubectl top` and HPA inputs |
 | [k8s-tools/issuer.install.sh](k8s-tools/issuer.install.sh) | letsencrypt ClusterIssuer |
@@ -78,6 +92,7 @@ Or call individual components directly:
 
 ```bash
 ./k8s-tools/nginx.install.sh
+./k8s-tools/external-dns.install.sh
 ./k8s-tools/cert-manager.install.sh
 ./k8s-tools/metrics.install.sh
 ./k8s-tools/issuer.install.sh --email you@example.com
@@ -87,6 +102,7 @@ Validate readiness:
 
 ```bash
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=5m
+kubectl rollout status deployment/external-dns -n external-dns --timeout=5m
 kubectl rollout status deployment/cert-manager -n cert-manager --timeout=5m
 kubectl rollout status deployment/metrics-server -n kube-system --timeout=5m
 kubectl get ingressclass nginx
@@ -240,8 +256,8 @@ App will be available at `http://localhost:9090`.
 
 For Kubernetes HTTPS path:
 
-1. Get ingress controller load balancer address.
-2. Point your domain DNS record to that address.
+1. Confirm ingress resources include expected hostnames.
+2. Confirm ExternalDNS has synced records for your domain filter.
 3. Wait for cert-manager challenge completion.
 
 Commands:
@@ -249,6 +265,7 @@ Commands:
 ```bash
 kubectl get svc -n ingress-nginx ingress-nginx-controller
 kubectl get ingress johnny-5-alive
+kubectl logs -n external-dns deployment/external-dns --tail=40
 kubectl get certificate -A
 kubectl get challenges -A
 ```
@@ -298,7 +315,23 @@ Likely causes:
 2. Domain not publicly reachable.
 3. Incorrect ingress host/tls values.
 
-### 9.3 App Not Starting
+### 9.3 ExternalDNS Not Syncing
+
+Checks:
+
+```bash
+kubectl get deployment external-dns -n external-dns
+kubectl get pods -n external-dns
+kubectl logs -n external-dns deployment/external-dns --tail=100
+```
+
+Likely causes:
+
+1. Missing or invalid `DO_API_TOKEN` used by `k8s-tools/external-dns.install.sh`.
+2. If `EXTERNAL_DNS_DOMAIN_FILTER` is set, ingress hosts are outside that filter.
+3. Conflicting TXT owner id between clusters.
+
+### 9.4 App Not Starting
 
 Checks:
 
@@ -310,7 +343,7 @@ kubectl logs -l app.kubernetes.io/name=johnny-5-alive
 
 If image pull fails, provide a reachable image repository in your Helm overrides.
 
-### 9.4 HPA Not Scaling
+### 9.5 HPA Not Scaling
 
 Checks:
 
@@ -326,7 +359,7 @@ Likely causes:
 2. Workload CPU is below target.
 3. HPA is not enabled in chart override values.
 
-### 9.5 Prometheus or Grafana Unavailable
+### 9.6 Prometheus or Grafana Unavailable
 
 Checks:
 
@@ -336,7 +369,7 @@ kubectl get events -n monitoring --sort-by=.metadata.creationTimestamp
 kubectl logs -n monitoring deployment/kube-prometheus-stack-operator
 ```
 
-### 9.6 Debug Pod Not Ready
+### 9.7 Debug Pod Not Ready
 
 Checks:
 

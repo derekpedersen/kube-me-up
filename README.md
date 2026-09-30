@@ -2,7 +2,7 @@
 
 Kube Me Up is a script-first path from fresh cluster to live HTTPS traffic.
 
-It installs ingress, TLS automation, metrics, and a sample app.
+It installs ingress, DNS automation, TLS automation, metrics, and a sample app.
 
 The Helm-based install and uninstall flows are Kubernetes-provider agnostic for existing clusters, so they work across AKS, EKS, GKE, DOKS, and similar environments. Automatic cluster creation is still DOKS-first.
 
@@ -11,11 +11,12 @@ Repo guidance for automation lives in [AGENTS.md](AGENTS.md). Manual recovery st
 ## What You Get
 
 1. `ingress-nginx` for routing
-2. `cert-manager` + ClusterIssuer for TLS
-3. `metrics-server` for `kubectl top` and HPA inputs
-4. Optional `kube-prometheus-stack` for Prometheus and Grafana
-5. Optional HPA tuning for `johnny-5-alive`
-6. Optional standalone debug pod in `johnny-5-debug`
+2. `external-dns` for automatic DNS records from ingress hosts
+3. `cert-manager` + ClusterIssuer for TLS
+4. `metrics-server` for `kubectl top` and HPA inputs
+5. Optional `kube-prometheus-stack` for Prometheus and Grafana
+6. Optional HPA tuning for `johnny-5-alive`
+7. Optional standalone debug pod in `johnny-5-debug`
 
 ## Script Layout
 
@@ -25,6 +26,7 @@ This repo is intentionally split by responsibility:
 |---|---|---|
 | [install.sh](install.sh) | root orchestrator | Calls the shared infra installers and then the app/debug installers in order |
 | [k8s-tools/nginx.install.sh](k8s-tools/nginx.install.sh) | shared infra | ingress-nginx |
+| [k8s-tools/external-dns.install.sh](k8s-tools/external-dns.install.sh) | shared infra | ExternalDNS (DigitalOcean provider) |
 | [k8s-tools/cert-manager.install.sh](k8s-tools/cert-manager.install.sh) | shared infra | cert-manager |
 | [k8s-tools/metrics.install.sh](k8s-tools/metrics.install.sh) | shared infra | metrics-server for `kubectl top` and HPA inputs |
 | [k8s-tools/issuer.install.sh](k8s-tools/issuer.install.sh) | shared infra | LetsEncrypt ClusterIssuer |
@@ -40,11 +42,31 @@ chmod +x install.sh
 ./install.sh --use-existing-cluster
 ```
 
+Required environment variables for ExternalDNS:
+
+```bash
+export DO_API_TOKEN="your-digitalocean-api-token"
+export EXTERNAL_DNS_TXT_OWNER_ID="kube-me-up"
+```
+
+Recommended for safer DNS scoping:
+
+```bash
+export EXTERNAL_DNS_DOMAIN_FILTER="example.com"
+```
+
 Install one shared component directly:
 
 ```bash
 chmod +x k8s-tools/nginx.install.sh
 ./k8s-tools/nginx.install.sh
+```
+
+Install ExternalDNS directly:
+
+```bash
+chmod +x k8s-tools/external-dns.install.sh
+./k8s-tools/external-dns.install.sh
 ```
 
 Deploy just the app:
@@ -89,6 +111,13 @@ Install only shared infrastructure:
 
 ```bash
 ./install.sh --use-existing-cluster --skip-app --skip-debug
+```
+
+Install only shared infrastructure and verify ExternalDNS:
+
+```bash
+make helm-charts DO_API_TOKEN=$DO_API_TOKEN EXTERNAL_DNS_DOMAIN_FILTER=example.com EXTERNAL_DNS_TXT_OWNER_ID=kube-me-up
+make external-dns-verify EXTERNAL_DNS_DOMAIN_FILTER=example.com
 ```
 
 Deploy the app only:
@@ -176,6 +205,7 @@ Included tools: `kubectl`, `helm`, `yq`, `curl`, `wget`, `nc`, `dig`, `ping`, `i
 ```bash
 kubectl get nodes
 kubectl get svc -n ingress-nginx ingress-nginx-controller
+kubectl get deployment external-dns -n external-dns
 kubectl get clusterissuer letsencrypt-prod
 kubectl get ingress johnny-5-alive
 kubectl get hpa johnny-5-alive
@@ -193,5 +223,14 @@ kubectl get pod johnny-5-debug -n default
 - `make`
 - `git`
 - `doctl` (only for installer-managed DOKS cluster creation)
+
+Required env vars for mandatory ExternalDNS shared infra:
+
+- `DO_API_TOKEN`
+- `EXTERNAL_DNS_TXT_OWNER_ID`
+
+Recommended env var for scoped DNS management:
+
+- `EXTERNAL_DNS_DOMAIN_FILTER`
 
 For deep troubleshooting and manual recovery, use [RUNBOOK.md](RUNBOOK.md).
