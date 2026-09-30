@@ -28,7 +28,7 @@ This repo is intentionally split by responsibility:
 | [k8s-tools/cert-manager.install.sh](k8s-tools/cert-manager.install.sh) | shared infra | cert-manager |
 | [k8s-tools/metrics.install.sh](k8s-tools/metrics.install.sh) | shared infra | metrics-server for `kubectl top` and HPA inputs |
 | [k8s-tools/issuer.install.sh](k8s-tools/issuer.install.sh) | shared infra | LetsEncrypt ClusterIssuer |
-| [johnny-5-alive/install.sh](johnny-5-alive/install.sh) | app-local | deploys the sample app |
+| [k8s-tools/johnny-5-alive.install.sh](k8s-tools/johnny-5-alive.install.sh) | app installer | deploys the sample app |
 | [johnny-5-debug/install.sh](johnny-5-debug/install.sh) | debug-local | deploys the standalone debug pod |
 
 ## Quick Start
@@ -50,8 +50,8 @@ chmod +x k8s-tools/nginx.install.sh
 Deploy just the app:
 
 ```bash
-chmod +x johnny-5-alive/install.sh
-./johnny-5-alive/install.sh --use-existing-cluster
+chmod +x k8s-tools/johnny-5-alive.install.sh
+./k8s-tools/johnny-5-alive.install.sh --domain alive.example.com
 ```
 
 Deploy just the debug pod:

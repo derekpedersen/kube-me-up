@@ -67,6 +67,8 @@ The repo is intentionally simple, script-driven, and operationally focused.
 - `install.sh`: guided installer and CLI flow
 - `uninstall.sh`: guided teardown flow for managed resources
 - `Makefile`: infra installation and cleanup targets
+- `k8s-tools/johnny-5-alive.install.sh`: canonical app installer entrypoint
+- `k8s-tools/johnny-5-debug.install.sh`: canonical debug pod installer entrypoint
 - `cluster_issuer.yaml`: TLS issuer manifest
 - `johnny-5-alive/.helm`: sample app chart
 - `README.md`: project overview and quick-start flow

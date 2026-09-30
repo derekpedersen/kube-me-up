@@ -143,7 +143,7 @@ main() {
 
   if [[ "$SKIP_APP" == false ]]; then
     log_info "Deploying johnny-5-alive"
-    run_if_present "$ROOT_DIR/johnny-5-alive/install.sh" $(strip_root_flags "${ROOT_ARGS[@]}")
+    run_if_present "$ROOT_DIR/k8s-tools/johnny-5-alive.install.sh" $(strip_root_flags "${ROOT_ARGS[@]}")
   fi
 
   if [[ "$SKIP_DEBUG" == false ]]; then

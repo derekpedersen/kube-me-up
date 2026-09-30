@@ -388,7 +388,7 @@ The repository now follows a clear installer split:
 
 1. Root orchestrator: [install.sh](install.sh)
 2. Shared infrastructure: [k8s-tools](k8s-tools)
-3. App deployment: [johnny-5-alive/install.sh](johnny-5-alive/install.sh)
+3. App deployment: [k8s-tools/johnny-5-alive.install.sh](k8s-tools/johnny-5-alive.install.sh)
 4. Debug pod: [johnny-5-debug/install.sh](johnny-5-debug/install.sh)
 
 This keeps cluster-level capability installs separate from app behavior and debug tooling.
