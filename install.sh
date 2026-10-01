@@ -31,7 +31,7 @@ simple, human-readable order:
      - nginx
      - cert-manager
      - metrics
-      - external-dns
+     - external-dns
      - issuer
   2. optional observability
   3. johnny-5-alive app

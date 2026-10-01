@@ -39,7 +39,7 @@ install-cert-manager: helm-repos
 install-metrics-server: helm-repos
 	helm upgrade --install metrics-server metrics-server/metrics-server \
 		--namespace kube-system \
-		--set args={--kubelet-insecure-tls,--kubelet-preferred-address-types=InternalIP\,ExternalIP\,Hostname}
+		--set 'args={--kubelet-insecure-tls,--kubelet-preferred-address-types=InternalIP\,ExternalIP\,Hostname}'
 	kubectl get deployment metrics-server -n kube-system
 	kubectl get apiservice v1beta1.metrics.k8s.io
 
