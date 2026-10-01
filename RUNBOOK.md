@@ -20,6 +20,19 @@ If you plan to create a DigitalOcean Kubernetes cluster from this workflow:
 command -v doctl
 ```
 
+Set required ExternalDNS environment variables before running shared infra installers:
+
+```bash
+export DO_API_TOKEN="your-digitalocean-api-token"
+export EXTERNAL_DNS_TXT_OWNER_ID="kube-me-up"
+```
+
+Recommended for safer DNS scoping:
+
+```bash
+export EXTERNAL_DNS_DOMAIN_FILTER="example.com"
+```
+
 ## 2. Choose Cluster Path
 
 You have two supported paths in this runbook.
@@ -58,23 +71,105 @@ kubectl get nodes
 
 ## 3. Install Infrastructure Layer
 
-This installs ingress, cert-manager, and metrics-server.
+The repo now splits infra work by responsibility instead of keeping everything in one installer.
+
+| Script | What it installs |
+|---|---|
+| [install.sh](install.sh) | root orchestrator for the full flow |
+| [k8s-tools/nginx.install.sh](k8s-tools/nginx.install.sh) | ingress-nginx |
+| [k8s-tools/external-dns.install.sh](k8s-tools/external-dns.install.sh) | ExternalDNS with DigitalOcean DNS provider |
+| [k8s-tools/cert-manager.install.sh](k8s-tools/cert-manager.install.sh) | cert-manager |
+| [k8s-tools/metrics.install.sh](k8s-tools/metrics.install.sh) | metrics-server for `kubectl top` and HPA inputs |
+| [k8s-tools/issuer.install.sh](k8s-tools/issuer.install.sh) | letsencrypt ClusterIssuer |
+
+Run the shared infra layer as a whole:
 
 ```bash
-make helm-charts
+./install.sh --use-existing-cluster --skip-app --skip-debug
+```
+
+Or call individual components directly:
+
+```bash
+./k8s-tools/nginx.install.sh
+./k8s-tools/external-dns.install.sh
+./k8s-tools/cert-manager.install.sh
+./k8s-tools/metrics.install.sh
+./k8s-tools/issuer.install.sh --email you@example.com
 ```
 
 Validate readiness:
 
 ```bash
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=5m
+kubectl rollout status deployment/external-dns -n external-dns --timeout=5m
 kubectl rollout status deployment/cert-manager -n cert-manager --timeout=5m
 kubectl rollout status deployment/metrics-server -n kube-system --timeout=5m
 kubectl get ingressclass nginx
 kubectl get apiservice v1beta1.metrics.k8s.io
 ```
 
-## 4. Configure and Apply ClusterIssuer
+## 4. Optional Observability Layer (Prometheus + Grafana)
+
+If you want the Prometheus/Grafana stack, use the repo’s observability entrypoint or keep it as a separate infra add-on.
+
+Install:
+
+```bash
+./k8s-tools/observability.install.sh
+```
+
+Validate readiness:
+
+```bash
+kubectl rollout status deployment/kube-prometheus-stack-operator -n monitoring --timeout=5m
+kubectl get svc -n monitoring kube-prometheus-stack-grafana
+kubectl get svc -n monitoring kube-prometheus-stack-prometheus
+```
+
+Access Grafana locally:
+
+```bash
+kubectl port-forward svc/kube-prometheus-stack-grafana -n monitoring 3000:80
+```
+
+## 5. Optional Standalone Debug Pod
+
+Use `johnny-5-debug` for exec-based connectivity and Kubernetes testing without deploying the app stack.
+
+This lives in its own project-local installer instead of the shared infra scripts:
+
+```bash
+./johnny-5-debug/install.sh --use-existing-cluster
+```
+
+Build image locally:
+
+```bash
+make debug-build
+make debug-build-publish
+```
+
+Deploy pod only:
+
+```bash
+make debug-deploy-pod
+kubectl exec -it -n default johnny-5-debug -- sh
+```
+
+Deploy with custom image and namespace:
+
+```bash
+make debug-deploy-pod DEBUG_IMAGE=your-registry/johnny-5-debug:tag DEBUG_NAMESPACE=default DEBUG_POD_NAME=johnny-5-debug
+```
+
+Delete debug pod:
+
+```bash
+make debug-delete-pod
+```
+
+## 6. Configure and Apply ClusterIssuer
 
 The default template in this repo includes a static email. For real use, apply your own email.
 
@@ -93,11 +188,11 @@ kubectl apply -f /tmp/cluster_issuer.runtime.yaml
 kubectl get clusterissuer letsencrypt-prod
 ```
 
-## 5. Deploy Johnny 5 Alive
+## 7. Deploy Johnny 5 Alive
 
 Choose one deploy mode.
 
-### 5.1 Kubernetes Helm Deploy
+### 7.1 Kubernetes Helm Deploy
 
 Prepare runtime override values to avoid mutating tracked files:
 
@@ -129,7 +224,26 @@ kubectl rollout status deployment/johnny-5-alive --timeout=5m
 kubectl get ingress johnny-5-alive
 ```
 
-### 5.2 Local Docker Deploy
+Enable HPA in runtime overrides:
+
+```bash
+cat >> /tmp/johnny-5-values.runtime.yaml <<'EOF'
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+EOF
+```
+
+Validate HPA:
+
+```bash
+kubectl get hpa johnny-5-alive
+```
+
+### 7.2 Local Docker Deploy
 
 ```bash
 cd johnny-5-alive
@@ -138,12 +252,12 @@ make run
 
 App will be available at `http://localhost:9090`.
 
-## 6. DNS and TLS Validation
+## 8. DNS and TLS Validation
 
 For Kubernetes HTTPS path:
 
-1. Get ingress controller load balancer address.
-2. Point your domain DNS record to that address.
+1. Confirm ingress resources include expected hostnames.
+2. Confirm ExternalDNS has synced records for your domain filter.
 3. Wait for cert-manager challenge completion.
 
 Commands:
@@ -151,6 +265,7 @@ Commands:
 ```bash
 kubectl get svc -n ingress-nginx ingress-nginx-controller
 kubectl get ingress johnny-5-alive
+kubectl logs -n external-dns deployment/external-dns --tail=40
 kubectl get certificate -A
 kubectl get challenges -A
 ```
@@ -167,9 +282,9 @@ Expected behavior:
 1. HTTP should eventually redirect to HTTPS when ingress and chart config are fully applied.
 2. HTTPS should return a valid certificate after ACME challenge succeeds.
 
-## 7. Troubleshooting
+## 9. Troubleshooting
 
-### 7.1 Ingress Pending
+### 9.1 Ingress Pending
 
 Symptom:
 
@@ -183,7 +298,7 @@ kubectl get svc -n ingress-nginx ingress-nginx-controller
 kubectl get ingressclass nginx
 ```
 
-### 7.2 Certificate Not Issued
+### 9.2 Certificate Not Issued
 
 Checks:
 
@@ -200,7 +315,23 @@ Likely causes:
 2. Domain not publicly reachable.
 3. Incorrect ingress host/tls values.
 
-### 7.3 App Not Starting
+### 9.3 ExternalDNS Not Syncing
+
+Checks:
+
+```bash
+kubectl get deployment external-dns -n external-dns
+kubectl get pods -n external-dns
+kubectl logs -n external-dns deployment/external-dns --tail=100
+```
+
+Likely causes:
+
+1. Missing or invalid `DO_API_TOKEN` used by `k8s-tools/external-dns.install.sh`.
+2. If `EXTERNAL_DNS_DOMAIN_FILTER` is set, ingress hosts are outside that filter.
+3. Conflicting TXT owner id between clusters.
+
+### 9.4 App Not Starting
 
 Checks:
 
@@ -212,7 +343,55 @@ kubectl logs -l app.kubernetes.io/name=johnny-5-alive
 
 If image pull fails, provide a reachable image repository in your Helm overrides.
 
-## 8. Cleanup
+### 9.5 HPA Not Scaling
+
+Checks:
+
+```bash
+kubectl get hpa johnny-5-alive -o yaml
+kubectl top pods -l app.kubernetes.io/name=johnny-5-alive
+kubectl describe hpa johnny-5-alive
+```
+
+Likely causes:
+
+1. `metrics-server` is not healthy.
+2. Workload CPU is below target.
+3. HPA is not enabled in chart override values.
+
+### 9.6 Prometheus or Grafana Unavailable
+
+Checks:
+
+```bash
+kubectl get pods -n monitoring
+kubectl get events -n monitoring --sort-by=.metadata.creationTimestamp
+kubectl logs -n monitoring deployment/kube-prometheus-stack-operator
+```
+
+### 9.7 Debug Pod Not Ready
+
+Checks:
+
+```bash
+kubectl get pod -n default johnny-5-debug
+kubectl describe pod -n default johnny-5-debug
+kubectl logs -n default johnny-5-debug
+```
+
+Likely causes:
+
+1. Image is not pullable from cluster nodes.
+2. Namespace mismatch between deploy and exec commands.
+3. Cluster policy blocks networking tools.
+
+## 10. Cleanup
+
+Prefer the script in repo root for normal teardown:
+
+```bash
+./uninstall.sh
+```
 
 Remove app:
 
@@ -226,6 +405,8 @@ Remove infrastructure:
 helm uninstall ingress-nginx -n ingress-nginx
 helm uninstall cert-manager -n cert-manager
 helm uninstall metrics-server -n kube-system
+helm uninstall kube-prometheus-stack -n monitoring
+kubectl delete pod johnny-5-debug -n default --ignore-not-found
 ```
 
 Delete DOKS cluster:
@@ -234,18 +415,29 @@ Delete DOKS cluster:
 doctl kubernetes cluster delete kube-me-up
 ```
 
-## 9. Installer Mapping
+## 11. Installer Mapping
 
-`install.sh` implements this runbook in guided form:
+The repository now follows a clear installer split:
+
+1. Root orchestrator: [install.sh](install.sh)
+2. Shared infrastructure: [k8s-tools](k8s-tools)
+3. App deployment: [k8s-tools/johnny-5-alive.install.sh](k8s-tools/johnny-5-alive.install.sh)
+4. Debug pod: [johnny-5-debug/install.sh](johnny-5-debug/install.sh)
+
+This keeps cluster-level capability installs separate from app behavior and debug tooling.
+
+The root script implements the guided flow in this order:
 
 1. Preflight checks.
 2. Cluster path prompts.
-3. Infrastructure install.
-4. Runtime ClusterIssuer generation and apply.
-5. Deploy mode prompt (Kubernetes or Docker).
-6. Post-install verification summary.
+3. Shared infra installer calls.
+4. App deployment.
+5. Debug deployment.
+6. ClusterIssuer apply.
+7. Optional observability helpers.
+8. Post-install verification summary.
 
-### 9.1 Dry Run and Resume Flags
+### 11.1 Dry Run and Resume Flags
 
 Use dry run to preview every command:
 
@@ -264,4 +456,37 @@ Use explicit skip flags to resume from partial progress:
 
 # Re-run app only
 ./install.sh --use-existing-cluster --skip-cluster --skip-infra --skip-issuer --deploy-mode kubernetes --domain your-domain.example.com
+
+# Install optional observability layer only
+./install.sh --use-existing-cluster --with-observability --skip-cluster --skip-infra --skip-issuer --skip-app --deploy-mode skip
+
+# Deploy standalone debug pod only
+./install.sh --use-existing-cluster --deploy-mode skip --skip-infra --skip-issuer --skip-app --with-debug-pod
+
+# Deploy standalone debug pod with custom image/namespace/name
+./install.sh --use-existing-cluster --deploy-mode skip --skip-infra --skip-issuer --skip-app --with-debug-pod --debug-pod-image your-registry/johnny-5-debug:tag --debug-pod-namespace default --debug-pod-name johnny-5-debug
+
+# Deploy app with HPA enabled
+./install.sh --use-existing-cluster --skip-cluster --skip-infra --deploy-mode kubernetes --enable-hpa --hpa-min-replicas 1 --hpa-max-replicas 3 --hpa-target-cpu 80 --hpa-target-mem 80 --email your-email@example.com --domain your-domain.example.com
+```
+
+### 11.2 One-Command Demo Target
+
+Use the repo root orchestrator for the guided flow:
+
+```bash
+./install.sh --use-existing-cluster --with-observability --domain your-domain.example.com --email your-email@example.com
+```
+
+Skip app or debug deploy if you only want the cluster foundation:
+
+```bash
+./install.sh --use-existing-cluster --skip-app --skip-debug
+./install.sh --use-existing-cluster --skip-infra --skip-issuer --skip-debug
+```
+
+Legacy aliases are still accepted for compatibility with earlier examples:
+
+```bash
+./install.sh --use-existing-cluster --skip-cluster --with-debug-pod
 ```

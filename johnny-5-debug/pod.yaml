@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: johnny-5-debug
+  labels:
+    app.kubernetes.io/name: johnny-5-debug
+spec:
+  containers:
+    - name: debug
+      image: johnny-5-debug:latest
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep infinity"]
+      stdin: true
+      tty: true
